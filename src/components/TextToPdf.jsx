@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Download, FileText, RotateCcw, FileEdit } from 'lucide-react';
+import { Download, FileText, RotateCcw } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 
 const defaults = {
@@ -57,25 +57,25 @@ export default function TextToPdf() {
   };
 
   return (
-    <section className="grid gap-6 lg:grid-cols-[1.25fr_.75fr] items-start">
+    <section className="grid gap-6 lg:grid-cols-[1.25fr_.75fr] items-start w-full">
       <div className="panel overflow-hidden border border-slate-200/80 shadow-xs">
-        <div className="border-b border-slate-100 p-4 sm:p-6 bg-slate-50/50">
+        <div className="border-b border-slate-100 p-4 sm:p-5 bg-slate-50/70">
           <div className="flex items-center gap-3">
-            <span className="rounded-xl bg-violet-100 p-2.5 text-violet-700 shrink-0">
-              <FileText size={22} />
+            <span className="rounded-xl bg-violet-100 p-2 text-violet-700 shrink-0">
+              <FileText size={20} />
             </span>
             <div>
-              <h2 className="text-xl font-bold tracking-tight text-slate-900">Text to PDF</h2>
-              <p className="text-xs sm:text-sm text-slate-500">Create a crisp, selectable PDF from plain text.</p>
+              <h2 className="text-lg sm:text-xl font-bold tracking-tight text-slate-900">Text to PDF</h2>
+              <p className="text-xs sm:text-sm text-slate-500">Create a clean, selectable PDF from text.</p>
             </div>
           </div>
         </div>
 
-        <div className="p-4 sm:p-6">
+        <div className="p-4 sm:p-5">
           <textarea
             value={settings.text}
             onChange={(e) => setSettings((s) => ({ ...s, text: e.target.value }))}
-            className="field min-h-[360px] sm:min-h-[420px] w-full resize-y font-mono text-sm leading-6"
+            className="field min-h-[300px] sm:min-h-[400px] w-full resize-y font-mono text-sm leading-6"
             aria-label="PDF text content"
             placeholder="Type your document content here..."
           />
@@ -86,19 +86,19 @@ export default function TextToPdf() {
               onClick={reset}
               className="inline-flex items-center gap-1 font-semibold text-slate-600 hover:text-slate-900 transition"
             >
-              <RotateCcw size={13} /> Reset Default
+              <RotateCcw size={12} /> Reset Default
             </button>
           </div>
         </div>
       </div>
 
-      <aside className="panel p-5 sm:p-6 border border-slate-200/80 shadow-xs">
+      <aside className="panel p-4 sm:p-5 border border-slate-200/80 shadow-xs">
         <h3 className="text-base font-bold text-slate-900">Document Settings</h3>
-        <p className="mt-1 text-xs text-slate-500">Configure appearance and file information.</p>
+        <p className="mt-1 text-xs text-slate-500">Configure appearance and file naming.</p>
 
-        <div className="mt-6 space-y-5">
+        <div className="mt-5 space-y-4">
           <label className="block">
-            <span className="mb-1.5 block text-xs font-semibold text-slate-700">PDF File Name</span>
+            <span className="mb-1 block text-xs font-semibold text-slate-700">PDF File Name</span>
             <div className="relative flex items-center">
               <input
                 type="text"
@@ -112,13 +112,13 @@ export default function TextToPdf() {
           </label>
 
           <label className="block">
-            <span className="mb-1.5 block text-xs font-semibold text-slate-700">Text Color</span>
+            <span className="mb-1 block text-xs font-semibold text-slate-700">Text Color</span>
             <div className="flex gap-2">
               <input
                 type="color"
                 value={settings.color}
                 onChange={(e) => setSettings((s) => ({ ...s, color: e.target.value }))}
-                className="h-10 w-14 cursor-pointer rounded-lg border border-slate-200 bg-white p-1"
+                className="h-10 w-12 cursor-pointer rounded-lg border border-slate-200 bg-white p-1"
               />
               <input
                 value={settings.color}
@@ -129,7 +129,7 @@ export default function TextToPdf() {
           </label>
 
           <label className="block">
-            <div className="mb-1.5 flex justify-between text-xs font-semibold text-slate-700">
+            <div className="mb-1 flex justify-between text-xs font-semibold text-slate-700">
               <span>Font Size</span>
               <span className="text-slate-500">{settings.fontSize} pt</span>
             </div>
@@ -144,7 +144,7 @@ export default function TextToPdf() {
           </label>
 
           <label className="block">
-            <div className="mb-1.5 flex justify-between text-xs font-semibold text-slate-700">
+            <div className="mb-1 flex justify-between text-xs font-semibold text-slate-700">
               <span>Page Margins</span>
               <span className="text-slate-500">{settings.padding} pt</span>
             </div>
@@ -164,7 +164,7 @@ export default function TextToPdf() {
             disabled={!settings.text.trim() || busy}
             className="btn-primary w-full justify-center py-2.5 text-sm"
           >
-            <Download size={16} />
+            <Download size={15} />
             {busy ? 'Creating PDF…' : 'Download PDF'}
           </button>
         </div>

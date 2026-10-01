@@ -1,5 +1,5 @@
 import React, { useCallback, useRef, useState } from 'react';
-import { Download, ImagePlus, Trash2, UploadCloud, FileEdit } from 'lucide-react';
+import { Download, Trash2, UploadCloud } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 
 const accepted = ['image/png', 'image/jpeg'];
@@ -62,8 +62,8 @@ export default function ImageToPdf() {
     <section className="panel p-4 sm:p-6 transition-all duration-200">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h2 className="text-xl font-bold tracking-tight text-slate-900">Image to PDF</h2>
-          <p className="text-sm text-slate-500">Combine PNG, JPG, or JPEG images into a clean PDF document.</p>
+          <h2 className="text-lg sm:text-xl font-bold tracking-tight text-slate-900">Image to PDF</h2>
+          <p className="text-xs sm:text-sm text-slate-500">Combine PNG, JPG, or JPEG images into a clean PDF document.</p>
         </div>
         <span className="self-start sm:self-auto rounded-full bg-violet-50 border border-violet-200 px-3 py-1 text-xs font-semibold text-violet-700">
           {images.length} {images.length === 1 ? 'image' : 'images'}
@@ -82,7 +82,7 @@ export default function ImageToPdf() {
           addFiles(e.dataTransfer.files);
         }}
         onClick={() => inputRef.current?.click()}
-        className={`mt-6 cursor-pointer rounded-2xl border-2 border-dashed p-6 sm:p-10 text-center transition ${
+        className={`mt-4 sm:mt-6 cursor-pointer rounded-2xl border-2 border-dashed p-6 sm:p-10 text-center transition ${
           drag
             ? 'border-violet-500 bg-violet-50'
             : 'border-slate-200 bg-slate-50 hover:border-violet-400 hover:bg-violet-50/40'
@@ -96,15 +96,15 @@ export default function ImageToPdf() {
           hidden
           onChange={(e) => addFiles(e.target.files)}
         />
-        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-slate-900/5">
-          <UploadCloud className="text-violet-600" size={28} />
+        <div className="mx-auto flex h-12 w-12 sm:h-14 sm:w-14 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-slate-900/5">
+          <UploadCloud className="text-violet-600" size={26} />
         </div>
-        <p className="mt-3 text-base font-semibold text-slate-800">Tap to browse or drop images here</p>
-        <p className="mt-1 text-xs sm:text-sm text-slate-500">Supports PNG, JPG, and JPEG</p>
+        <p className="mt-3 text-sm sm:text-base font-semibold text-slate-800">Tap to upload images</p>
+        <p className="mt-1 text-xs text-slate-500">Supports PNG, JPG, and JPEG</p>
       </div>
 
       {images.length > 0 && (
-        <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+        <div className="mt-5 grid grid-cols-2 gap-2.5 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
           {images.map((img, index) => (
             <article
               key={img.id}
@@ -113,6 +113,7 @@ export default function ImageToPdf() {
               <div className="relative aspect-[4/3] bg-slate-100">
                 <img src={img.data} alt={img.name} className="h-full w-full object-contain p-1" />
                 <button
+                  type="button"
                   onClick={(e) => {
                     e.stopPropagation();
                     remove(img.id);
@@ -120,13 +121,13 @@ export default function ImageToPdf() {
                   aria-label={`Remove ${img.name}`}
                   className="absolute right-1.5 top-1.5 rounded-lg bg-white/90 p-1.5 text-slate-500 shadow-sm backdrop-blur-xs transition hover:bg-red-50 hover:text-red-600"
                 >
-                  <Trash2 size={14} />
+                  <Trash2 size={13} />
                 </button>
                 <span className="absolute bottom-1.5 left-1.5 rounded-md bg-slate-900/75 px-1.5 py-0.5 text-[10px] font-bold text-white">
                   #{index + 1}
                 </span>
               </div>
-              <div className="truncate px-2.5 py-2 text-xs font-medium text-slate-700" title={img.name}>
+              <div className="truncate px-2 py-1.5 text-[11px] font-medium text-slate-700" title={img.name}>
                 {img.name}
               </div>
             </article>
@@ -134,8 +135,8 @@ export default function ImageToPdf() {
         </div>
       )}
 
-      <div className="mt-6 flex flex-col gap-4 border-t border-slate-100 pt-6">
-        <div className="flex flex-col gap-1 sm:max-w-xs">
+      <div className="mt-6 flex flex-col gap-4 border-t border-slate-100 pt-5">
+        <div className="flex flex-col gap-1 w-full sm:max-w-xs">
           <label htmlFor="image-pdf-filename" className="text-xs font-semibold text-slate-600">
             Export File Name
           </label>
@@ -152,22 +153,22 @@ export default function ImageToPdf() {
           </div>
         </div>
 
-        <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-3">
+        <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-2.5">
           <button
             type="button"
-            className="btn-secondary w-full sm:w-auto justify-center"
+            className="btn-secondary w-full sm:w-auto justify-center text-sm py-2"
             onClick={() => setImages([])}
             disabled={!images.length}
           >
-            <Trash2 size={16} /> Clear all
+            <Trash2 size={15} /> Clear all
           </button>
           <button
             type="button"
-            className="btn-primary w-full sm:w-auto justify-center"
+            className="btn-primary w-full sm:w-auto justify-center text-sm py-2"
             onClick={convert}
             disabled={!images.length || busy}
           >
-            <Download size={16} />
+            <Download size={15} />
             {busy ? 'Creating PDF…' : 'Convert Images to PDF'}
           </button>
         </div>

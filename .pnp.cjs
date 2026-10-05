@@ -33,6 +33,7 @@ const RAW_RUNTIME_STATE =
           ["@testing-library/user-event", "virtual:56df56346345f1a0c8fda93e0964e561f1990f7a2c7cd4b77126396e1877f5f7a4fc1001deef2565c90e4f2c3b3d289f2980f7e6d97fbf6fff5216537709c51a#npm:14.6.7"],\
           ["autoprefixer", "virtual:56df56346345f1a0c8fda93e0964e561f1990f7a2c7cd4b77126396e1877f5f7a4fc1001deef2565c90e4f2c3b3d289f2980f7e6d97fbf6fff5216537709c51a#npm:10.6.1"],\
           ["jspdf", "npm:4.2.1"],\
+          ["jszip", "npm:3.10.2"],\
           ["lucide-react", "virtual:56df56346345f1a0c8fda93e0964e561f1990f7a2c7cd4b77126396e1877f5f7a4fc1001deef2565c90e4f2c3b3d289f2980f7e6d97fbf6fff5216537709c51a#npm:1.49.0"],\
           ["pdf-lib", "npm:1.17.1"],\
           ["pdfjs-dist", "npm:3.11.174"],\
@@ -10237,6 +10238,15 @@ const RAW_RUNTIME_STATE =
         "linkType": "HARD"\
       }]\
     ]],\
+    ["immediate", [\
+      ["npm:3.0.6", {\
+        "packageLocation": "../../AppData/Local/Yarn/Berry/cache/immediate-npm-3.0.6-c27588a2d3-10c0.zip/node_modules/immediate/",\
+        "packageDependencies": [\
+          ["immediate", "npm:3.0.6"]\
+        ],\
+        "linkType": "HARD"\
+      }]\
+    ]],\
     ["immer", [\
       ["npm:9.0.21", {\
         "packageLocation": "../../AppData/Local/Yarn/Berry/cache/immer-npm-9.0.21-03c48c58ea-10c0.zip/node_modules/immer/",\
@@ -11743,6 +11753,19 @@ const RAW_RUNTIME_STATE =
         "linkType": "HARD"\
       }]\
     ]],\
+    ["jszip", [\
+      ["npm:3.10.2", {\
+        "packageLocation": "../../AppData/Local/Yarn/Berry/cache/jszip-npm-3.10.2-acb84e1522-10c0.zip/node_modules/jszip/",\
+        "packageDependencies": [\
+          ["jszip", "npm:3.10.2"],\
+          ["lie", "npm:3.3.0"],\
+          ["pako", "npm:1.0.11"],\
+          ["readable-stream", "npm:2.3.8"],\
+          ["setimmediate", "npm:1.0.5"]\
+        ],\
+        "linkType": "HARD"\
+      }]\
+    ]],\
     ["keyv", [\
       ["npm:4.5.4", {\
         "packageLocation": "../../AppData/Local/Yarn/Berry/cache/keyv-npm-4.5.4-4c8e2cf7f7-10c0.zip/node_modules/keyv/",\
@@ -11826,6 +11849,16 @@ const RAW_RUNTIME_STATE =
           ["levn", "npm:0.4.1"],\
           ["prelude-ls", "npm:1.2.1"],\
           ["type-check", "npm:0.4.0"]\
+        ],\
+        "linkType": "HARD"\
+      }]\
+    ]],\
+    ["lie", [\
+      ["npm:3.3.0", {\
+        "packageLocation": "../../AppData/Local/Yarn/Berry/cache/lie-npm-3.3.0-35ddd11a4d-10c0.zip/node_modules/lie/",\
+        "packageDependencies": [\
+          ["immediate", "npm:3.0.6"],\
+          ["lie", "npm:3.3.0"]\
         ],\
         "linkType": "HARD"\
       }]\
@@ -13181,6 +13214,7 @@ const RAW_RUNTIME_STATE =
           ["@testing-library/user-event", "virtual:56df56346345f1a0c8fda93e0964e561f1990f7a2c7cd4b77126396e1877f5f7a4fc1001deef2565c90e4f2c3b3d289f2980f7e6d97fbf6fff5216537709c51a#npm:14.6.7"],\
           ["autoprefixer", "virtual:56df56346345f1a0c8fda93e0964e561f1990f7a2c7cd4b77126396e1877f5f7a4fc1001deef2565c90e4f2c3b3d289f2980f7e6d97fbf6fff5216537709c51a#npm:10.6.1"],\
           ["jspdf", "npm:4.2.1"],\
+          ["jszip", "npm:3.10.2"],\
           ["lucide-react", "virtual:56df56346345f1a0c8fda93e0964e561f1990f7a2c7cd4b77126396e1877f5f7a4fc1001deef2565c90e4f2c3b3d289f2980f7e6d97fbf6fff5216537709c51a#npm:1.49.0"],\
           ["pdf-lib", "npm:1.17.1"],\
           ["pdfjs-dist", "npm:3.11.174"],\
@@ -16119,6 +16153,15 @@ const RAW_RUNTIME_STATE =
           ["es-errors", "npm:1.3.0"],\
           ["es-object-atoms", "npm:1.1.2"],\
           ["set-proto", "npm:1.0.0"]\
+        ],\
+        "linkType": "HARD"\
+      }]\
+    ]],\
+    ["setimmediate", [\
+      ["npm:1.0.5", {\
+        "packageLocation": "../../AppData/Local/Yarn/Berry/cache/setimmediate-npm-1.0.5-54587459b6-10c0.zip/node_modules/setimmediate/",\
+        "packageDependencies": [\
+          ["setimmediate", "npm:1.0.5"]\
         ],\
         "linkType": "HARD"\
       }]\

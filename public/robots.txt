@@ -1,2 +1,4 @@
 User-agent: *
 Allow: /
+
+Sitemap: https://pixelpdf-opal.vercel.app/sitemap.xml

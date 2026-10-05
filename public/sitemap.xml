@@ -8,65 +8,65 @@
     <priority>1.0</priority>
   </url>
 
-  <!-- Text to PDF Tool -->
+  <!-- TextToPdf Page -->
   <url>
-    <loc>https://pixelpdf-opal.vercel.app/#text</loc>
+    <loc>https://pixelpdf-opal.vercel.app/TextToPdf</loc>
     <lastmod>2026-10-05</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.9</priority>
   </url>
 
-  <!-- Image to PDF Tool -->
+  <!-- ImageToPdf Page -->
   <url>
-    <loc>https://pixelpdf-opal.vercel.app/#image</loc>
+    <loc>https://pixelpdf-opal.vercel.app/ImageToPdf</loc>
     <lastmod>2026-10-05</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.9</priority>
   </url>
 
-  <!-- In-Browser PDF Editor -->
+  <!-- PdfEditor Page -->
   <url>
-    <loc>https://pixelpdf-opal.vercel.app/#editor</loc>
+    <loc>https://pixelpdf-opal.vercel.app/PdfEditor</loc>
     <lastmod>2026-10-05</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.9</priority>
   </url>
 
-  <!-- Digital Signature Tool -->
+  <!-- DigitalSignaturePdf Page -->
   <url>
-    <loc>https://pixelpdf-opal.vercel.app/#signature</loc>
+    <loc>https://pixelpdf-opal.vercel.app/DigitalSignaturePdf</loc>
     <lastmod>2026-10-05</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
 
-  <!-- Freehand Writing Pad -->
+  <!-- FreehandPad Page -->
   <url>
-    <loc>https://pixelpdf-opal.vercel.app/#freehand</loc>
+    <loc>https://pixelpdf-opal.vercel.app/FreehandPad</loc>
     <lastmod>2026-10-05</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
 
-  <!-- Merge & Split PDF Tool -->
+  <!-- MergeSplitPdf Page -->
   <url>
-    <loc>https://pixelpdf-opal.vercel.app/#mergesplit</loc>
+    <loc>https://pixelpdf-opal.vercel.app/MergeSplitPdf</loc>
     <lastmod>2026-10-05</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
 
-  <!-- Image Compressor Tool -->
+  <!-- ImageCompressor Page -->
   <url>
-    <loc>https://pixelpdf-opal.vercel.app/#compressor</loc>
+    <loc>https://pixelpdf-opal.vercel.app/ImageCompressor</loc>
     <lastmod>2026-10-05</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
 
-  <!-- PDF to Image Converter -->
+  <!-- PdfToImage Page -->
   <url>
-    <loc>https://pixelpdf-opal.vercel.app/#pdftoimage</loc>
+    <loc>https://pixelpdf-opal.vercel.app/PdfToImage</loc>
     <lastmod>2026-10-05</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>

@@ -34,8 +34,37 @@ const tabs = [
   { id: 'pdftoimage', label: 'PDF to Image', icon: FileArchive, desc: 'Rasterize PDF pages to images' }
 ];
 
+// Map URL paths to tab keys
+const pathToTab = {
+  '/TextToPdf': 'text',
+  '/ImageToPdf': 'image',
+  '/PdfEditor': 'editor',
+  '/DigitalSignaturePdf': 'signature',
+  '/FreehandPad': 'freehand',
+  '/MergeSplitPdf': 'mergesplit',
+  '/ImageCompressor': 'compressor',
+  '/PdfToImage': 'pdftoimage',
+};
+
+// Map tab keys to clean URL paths
+const tabToPath = {
+  text: '/TextToPdf',
+  image: '/ImageToPdf',
+  editor: '/PdfEditor',
+  signature: '/DigitalSignaturePdf',
+  freehand: '/FreehandPad',
+  mergesplit: '/MergeSplitPdf',
+  compressor: '/ImageCompressor',
+  pdftoimage: '/PdfToImage',
+};
+
 export default function App() {
-  const [activeTab, setActiveTab] = useState('text');
+  // 1. Detect path from URL on first load
+  const [activeTab, setActiveTab] = useState(() => {
+    const currentPath = window.location.pathname;
+    return pathToTab[currentPath] || 'text';
+  });
+
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef(null);
@@ -46,6 +75,27 @@ export default function App() {
   const primaryTabs = tabs.slice(0, 5);
   const overflowTabs = tabs.slice(5);
 
+  // 2. Keep browser URL in sync when tabs are switched
+  const selectTab = (id) => {
+    setActiveTab(id);
+    setMobileMenuOpen(false);
+    setDropdownOpen(false);
+    if (tabToPath[id]) {
+      window.history.pushState(null, '', tabToPath[id]);
+    }
+  };
+
+  // 3. Handle browser back/forward buttons
+  useEffect(() => {
+    const handlePopState = () => {
+      const tab = pathToTab[window.location.pathname];
+      if (tab) setActiveTab(tab);
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  // Close overflow dropdown on outside click
   useEffect(() => {
     const handleOutsideClick = (e) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
@@ -55,12 +105,6 @@ export default function App() {
     document.addEventListener('mousedown', handleOutsideClick);
     return () => document.removeEventListener('mousedown', handleOutsideClick);
   }, []);
-
-  const selectTab = (id) => {
-    setActiveTab(id);
-    setMobileMenuOpen(false);
-    setDropdownOpen(false);
-  };
 
   const ActiveComponent = () => {
     switch (activeTab) {
@@ -87,10 +131,15 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(124,58,237,.08),_transparent_32%),radial-gradient(circle_at_top_right,_rgba(37,99,235,.08),_transparent_30%)] flex flex-col font-sans">
+      {/* Sticky Universal Header */}
       <header className="sticky top-0 z-40 border-b border-slate-200/80 bg-white/95 backdrop-blur-md">
         <div className="mx-auto max-w-7xl px-3 py-2.5 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2.5 shrink-0">
+            {/* Brand Logo & Name */}
+            <div
+              className="flex items-center gap-2.5 shrink-0 cursor-pointer"
+              onClick={() => selectTab('text')}
+            >
               <img
                 src={`${process.env.PUBLIC_URL}/logo.png`}
                 alt="PixelPDF logo"
@@ -106,7 +155,9 @@ export default function App() {
               </div>
             </div>
 
+            {/* Desktop Navigation */}
             <nav aria-label="Desktop tools switcher" className="hidden md:flex items-center gap-1 rounded-2xl bg-slate-100 p-1">
+              {/* Visible on 2xl: All 8 tools inline */}
               <div className="hidden 2xl:flex items-center gap-1">
                 {tabs.map(({ id, label, icon: Icon }) => (
                   <button
@@ -125,6 +176,7 @@ export default function App() {
                 ))}
               </div>
 
+              {/* Visible on MD to XL: First 5 tools + Dropdown */}
               <div className="flex 2xl:hidden items-center gap-1">
                 {primaryTabs.map(({ id, label, icon: Icon }) => (
                   <button
@@ -142,13 +194,14 @@ export default function App() {
                   </button>
                 ))}
 
+                {/* More Tools Dropdown */}
                 <div className="relative" ref={dropdownRef}>
                   <button
                     type="button"
                     onClick={() => setDropdownOpen(!dropdownOpen)}
                     className={`inline-flex items-center gap-1 rounded-xl px-2.5 py-1.5 text-xs font-semibold transition ${
                       overflowTabs.some((t) => t.id === activeTab)
-                        ? 'bg-violet-50 text-violet-700'
+                        ? 'bg-violet-50 text-violet-700 font-bold'
                         : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
                     }`}
                   >
@@ -184,6 +237,7 @@ export default function App() {
               </div>
             </nav>
 
+            {/* Mobile Tool Trigger (< md) */}
             <div className="flex md:hidden items-center gap-2">
               <button
                 type="button"
@@ -207,6 +261,7 @@ export default function App() {
           </div>
         </div>
 
+        {/* Mobile Dropdown Grid Sheet */}
         {mobileMenuOpen && (
           <div className="border-t border-slate-100 bg-white/95 px-3 py-3 backdrop-blur-md md:hidden animate-in fade-in slide-in-from-top-2">
             <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider px-1 mb-2">
@@ -236,6 +291,7 @@ export default function App() {
         )}
       </header>
 
+      {/* Main Workspace Area */}
       <main className="mx-auto max-w-7xl w-full px-3 py-4 sm:px-6 sm:py-6 lg:px-8 flex-1">
         <section
           aria-label="Key features"
@@ -278,6 +334,7 @@ export default function App() {
           </div>
         </section>
 
+        {/* Current Active Tool Component */}
         <ActiveComponent />
       </main>
 

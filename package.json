@@ -6,6 +6,7 @@
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.1.0",
     "@testing-library/user-event": "^14.5.2",
+    "docx": "9.5.1",
     "jspdf": "^4.2.1",
     "jszip": "^3.10.2",
     "lucide-react": "^1.49.0",
@@ -14,13 +15,15 @@
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-scripts": "^5.0.1",
+    "tesseract.js": "6.0.1",
     "web-vitals": "^4.2.4"
   },
   "scripts": {
     "start": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
-    "eject": "react-scripts eject"
+    "eject": "react-scripts eject",
+    "test:ci": "react-scripts test --watchAll=false --runInBand"
   },
   "browserslist": {
     "production": [
@@ -35,9 +38,11 @@
     ]
   },
   "devDependencies": {
+    "@testing-library/dom": "10.4.1",
     "autoprefixer": "10",
     "postcss": "8",
-    "tailwindcss": "3.4.17"
+    "tailwindcss": "3.4.17",
+    "typescript": "4.9.5"
   },
-  "packageManager": "yarn@4.18.0+sha512.fcb8716fe7cd0eece141ffc18b92193a9df9204c1ba83189c288835223fc0bbe64af473bab0d5e9927a7daeb5caf2bb07eb2787cc9338ca040ea125f2a1f2f7e"
+  "packageManager": "yarn@4.18.1"
 }

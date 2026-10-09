@@ -1,0 +1,3 @@
+OCR runtime: Tesseract.js 6.0.1 / Tesseract.js-core, Apache-2.0.
+Language data: https://github.com/tesseract-ocr/tessdata (4.0.0 trained data distribution from tessdata.projectnaptha.com), Apache-2.0.
+PDF worker: pdfjs-dist 3.11.174, Apache-2.0. See included licenses.

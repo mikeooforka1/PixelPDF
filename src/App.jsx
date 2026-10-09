@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
   FileText,
+  Download,
   Image as ImageIcon,
   Layers,
   FileSignature,
@@ -21,6 +22,10 @@ import DigitalSignaturePdf from './pages/DigitalSignaturePdf';
 import FreehandPad from './pages/FreehandPad';
 import ImageCompressor from './pages/ImageCompressor';
 import PdfToImage from './pages/PdfToImage';
+import * as pdfjsLib from 'pdfjs-dist';
+
+// All document tools share the same, bundled worker when installed or offline.
+pdfjsLib.GlobalWorkerOptions.workerSrc = `${process.env.PUBLIC_URL}/ocr/pdf.worker.min.js`;
 
 const tabs = [
   { id: 'text', label: 'Text to PDF', icon: FileText, desc: 'Convert formatted text to PDF' },
@@ -60,6 +65,165 @@ const tabToPath = {
   compressor: '/ImageCompressor',
   pdftoimage: '/PdfToImage',
 };
+
+
+function isAppWindow() {
+  return Boolean(window.matchMedia?.('(display-mode: standalone)').matches || window.navigator.standalone);
+}
+export function InstallAppPanel() {
+  const [appMode, setAppMode] = useState(isAppWindow);
+  const [installed, setInstalled] = useState(isAppWindow);
+  const [online, setOnline] = useState(() => navigator.onLine);
+  const [offline, setOffline] = useState('idle');
+  const [progress, setProgress] = useState(0);
+  const [message, setMessage] = useState('');
+  const [dialog, setDialog] = useState(null);
+  const [prompting, setPrompting] = useState(false);
+  const [canPrompt, setCanPrompt] = useState(Boolean(window.pixelpdfInstallPrompt));
+  const [updateReady, setUpdateReady] = useState(false);
+  const promptRef = useRef(window.pixelpdfInstallPrompt);
+  const registration = useRef(null), panel = useRef(null), installButton = useRef(null);
+  const mounted = useRef(true), offlinePort = useRef(null), reloading = useRef(false), wasDialogOpen = useRef(false), preparingRef = useRef(false), setupTimer = useRef(null);
+  const baseURL = new URL(`${process.env.PUBLIC_URL || ''}/`, window.location.origin);
+
+  function send(worker, data, handle) {
+    if (!worker) return;
+    const channel = new MessageChannel();
+    channel.port1.onmessage = event => {
+      if (mounted.current) handle(event.data);
+      if (['READY', 'ERROR', 'STATUS'].includes(event.data.type)) channel.port1.close();
+    };
+    worker.postMessage(data, [channel.port2]);
+    return channel.port1;
+  }
+  async function prepareOffline() {
+    if (preparingRef.current) return;
+    if (!navigator.onLine) { setMessage('Connect to the internet once to prepare offline use.'); return; }
+    if (!window.isSecureContext || !('serviceWorker' in navigator)) {
+      setMessage('Offline setup needs HTTPS and a browser that supports service workers.'); return;
+    }
+    preparingRef.current = true;
+    setOffline('preparing'); setProgress(0); setMessage('');
+    try {
+      // Best effort: supported browsers may retain app assets more reliably.
+      navigator.storage?.persist?.().catch(() => {});
+      const ready = await Promise.race([navigator.serviceWorker.ready, new Promise((_, reject) => setTimeout(() => reject(new Error('App setup is not ready. Reload while online and try again.')), 30000))]);
+      if (!mounted.current) return;
+      offlinePort.current?.close();
+      setupTimer.current = setTimeout(() => { preparingRef.current = false; offlinePort.current?.close(); if (mounted.current) { setOffline('error'); setMessage('Offline setup paused. Reconnect and use Prepare offline to retry.'); } }, 300000);
+      offlinePort.current = send(ready.active, { type: 'PREPARE_OFFLINE' }, data => {
+        if (data.type === 'PROGRESS') setProgress(data.progress);
+        if (data.type === 'READY') { clearTimeout(setupTimer.current); preparingRef.current = false; setOffline('ready'); setProgress(100); setMessage(''); }
+        if (data.type === 'ERROR') { clearTimeout(setupTimer.current); preparingRef.current = false; setOffline('error'); setMessage(data.message); }
+      });
+    } catch (error) { preparingRef.current = false; if (mounted.current) { setOffline('error'); setMessage(error.message || 'Offline setup is unavailable.'); } }
+  }
+  useEffect(() => {
+    mounted.current = true;
+    const onInstallReady = () => { promptRef.current = window.pixelpdfInstallPrompt; setCanPrompt(Boolean(promptRef.current)); };
+    const onInstalled = () => { promptRef.current = null; setCanPrompt(false); setInstalled(true); setDialog(null); prepareOffline(); };
+    const onNetwork = () => setOnline(navigator.onLine);
+    const mode = window.matchMedia?.('(display-mode: standalone)');
+    const onMode = () => { const value = isAppWindow(); setAppMode(value); if (value) setInstalled(true); };
+    window.addEventListener('pixelpdf-install-ready', onInstallReady);
+    window.addEventListener('appinstalled', onInstalled);
+    window.addEventListener('online', onNetwork); window.addEventListener('offline', onNetwork);
+    mode?.addEventListener?.('change', onMode);
+    const onController = () => {
+      if (reloading.current) { window.location.reload(); return; }
+      send(navigator.serviceWorker.controller, { type: 'STATUS' }, data => { if (data.ready) setOffline('ready'); });
+    };
+    if (process.env.NODE_ENV === 'production' && window.isSecureContext && 'serviceWorker' in navigator) {
+      navigator.serviceWorker.addEventListener('controllerchange', onController);
+      const script = [...document.scripts].map(item => item.src).find(src => /\/main\.[^/]+\.js$/.test(src));
+      const build = script ? new URL(script).pathname.split('/').pop() : 'v1';
+      navigator.serviceWorker.register(new URL(`sw.js?build=${encodeURIComponent(build)}`, baseURL), { scope: baseURL.pathname, updateViaCache: 'none' })
+        .then(reg => {
+          if (!mounted.current) return; registration.current = reg;
+          if (reg.waiting) setUpdateReady(true);
+          reg.addEventListener('updatefound', () => {
+            const next = reg.installing;
+            next?.addEventListener('statechange', () => {
+              if (!mounted.current) return;
+              if (next.state === 'installed' && navigator.serviceWorker.controller) setUpdateReady(Boolean(reg.waiting));
+              if (next.state === 'redundant') setMessage('App setup could not finish. Reload while online to retry.');
+            });
+          });
+          if (reg.active) send(reg.active, { type: 'STATUS' }, data => { if (data.ready) setOffline('ready'); });
+          if (isAppWindow()) prepareOffline();
+        }).catch(() => { if (mounted.current) setMessage('Offline setup is unavailable. You can keep using the tools online.'); });
+    }
+    return () => {
+      mounted.current = false; offlinePort.current?.close(); clearTimeout(setupTimer.current);
+      window.removeEventListener('pixelpdf-install-ready', onInstallReady);
+      window.removeEventListener('appinstalled', onInstalled);
+      window.removeEventListener('online', onNetwork); window.removeEventListener('offline', onNetwork);
+      mode?.removeEventListener?.('change', onMode);
+      navigator.serviceWorker?.removeEventListener('controllerchange', onController);
+    };
+    // Register once. Tools and menu state must not restart setup or install prompts.
+  }, []);
+  useEffect(() => {
+    if (dialog && panel.current) {
+      if (panel.current.showModal) panel.current.showModal();
+      else panel.current.setAttribute('open', '');
+    }
+    if (!dialog && wasDialogOpen.current) installButton.current?.focus({ preventScroll: true });
+    wasDialogOpen.current = Boolean(dialog);
+  }, [dialog]);
+  async function install() {
+    if (prompting) return;
+    const event = promptRef.current;
+    if (!event) { setDialog('install'); return; }
+    setPrompting(true);
+    // An install event is single-use. Only request it in direct response to this click.
+    promptRef.current = null; window.pixelpdfInstallPrompt = null; setCanPrompt(false);
+    try {
+      await event.prompt(); const choice = await event.userChoice;
+      if (choice.outcome === 'accepted') { setInstalled(true); prepareOffline(); }
+    } catch { setDialog('install'); }
+    finally { if (mounted.current) setPrompting(false); }
+  }
+  function applyUpdate() {
+    const next = registration.current?.waiting;
+    if (!next) { setDialog(null); setUpdateReady(false); return; }
+    reloading.current = true; next.postMessage({ type: 'SKIP_WAITING' });
+  }
+  const appleMobile = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const safari = /Safari/.test(navigator.userAgent) && !/Chrome|Chromium|Edg/.test(navigator.userAgent);
+  return <>
+    <div className="border-t border-slate-100 bg-gradient-to-r from-violet-50/70 via-white to-blue-50/50">
+      <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-2 px-3 py-2 sm:px-6 lg:px-8">
+        <div className="flex min-w-0 items-center gap-2 text-xs text-slate-600">
+          <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${online ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+          <span className="hidden min-[420px]:inline">{appMode ? 'Your document workspace' : 'All your PDF tools. One app.'}</span><span className="min-[420px]:hidden">PixelPDF</span>
+          {offline === 'ready' && <span className="font-semibold text-emerald-700">Offline ready</span>}
+          {!online && <span className="font-semibold text-amber-700">Offline</span>}
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          {updateReady && <button type="button" onClick={() => setDialog('update')} className="rounded-lg px-2 py-2 text-xs font-semibold text-violet-700 hover:bg-violet-50">Update available</button>}
+          {installed ? <span className="inline-flex items-center gap-1.5 rounded-full border border-violet-200 bg-white px-3 py-1.5 text-xs font-semibold text-violet-700"><ShieldCheck size={13} />{appMode ? 'App mode' : 'Installed'}</span> :
+            <button ref={installButton} type="button" onClick={install} disabled={prompting} aria-label="Install PixelPDF app" title={canPrompt ? 'Install PixelPDF on this device' : 'How to install PixelPDF on this device'} className="inline-flex min-h-[36px] items-center gap-1.5 rounded-full bg-violet-600 px-3.5 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-violet-700 focus-visible:ring-4 focus-visible:ring-violet-200 disabled:opacity-60"><Download size={14} />{prompting ? 'Opening…' : 'Install app'}</button>}
+          {installed && offline !== 'ready' && offline !== 'preparing' && <button type="button" onClick={prepareOffline} className="rounded-lg px-2 py-2 text-xs font-semibold text-slate-600">Prepare offline</button>}
+        </div>
+      </div>
+      {offline === 'preparing' && <div role="status" aria-live="polite" className="mx-auto max-w-7xl px-3 pb-2 text-xs text-slate-500 sm:px-6 lg:px-8">Preparing offline tools · {progress}%<div role="progressbar" aria-label="Offline tools download" aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100} className="mt-1 h-1 overflow-hidden rounded-full bg-violet-100"><div style={{width: `${progress}%`}} className="h-full bg-violet-500" /></div></div>}
+      {message && <p role="status" className="mx-auto max-w-7xl px-3 pb-2 text-xs text-amber-800 sm:px-6 lg:px-8">{message}</p>}
+    </div>
+    {dialog && <dialog ref={panel} aria-labelledby="install-title" onCancel={event => { event.preventDefault(); setDialog(null); }} onClick={event => { if (event.target === event.currentTarget) { const bounds = event.currentTarget.getBoundingClientRect(); if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) setDialog(null); } }} className="fixed max-h-[85dvh] w-[calc(100%_-_32px)] max-w-md overflow-y-auto rounded-3xl border border-slate-200 bg-white p-5 text-slate-800 shadow-2xl sm:p-7">
+      <div className="flex items-center justify-between gap-3"><div className="rounded-2xl bg-violet-50 p-3 text-violet-600"><Download size={24} /></div><button type="button" autoFocus aria-label="Close installation help" onClick={() => setDialog(null)} className="rounded-full p-2 text-slate-500 hover:bg-slate-100"><X size={20} /></button></div>
+      <h2 id="install-title" className="mt-4 text-2xl font-bold tracking-tight">{dialog === 'update' ? 'A fresh PixelPDF is ready' : 'PixelPDF, one tap away'}</h2>
+      {dialog === 'update' ? <><p className="mt-3 text-sm text-slate-600">Updating reloads this window. Export any unsaved documents first.</p><button type="button" onClick={applyUpdate} className="mt-5 w-full rounded-xl bg-violet-600 px-4 py-3 font-semibold text-white">Update and reload</button></> : <>
+        <p className="mt-3 text-sm leading-relaxed text-slate-600">Keep every PDF tool together in an app window. Scan, convert and sign documents privately on your device.</p>
+        <ol className="mt-5 list-decimal space-y-2 pl-5 text-sm leading-relaxed text-slate-700">
+          {appleMobile ? <><li>Open this site in Safari, then tap Share.</li><li>Choose Add to Home Screen, enable Open as Web App if shown, then tap Add.</li><li>Open PixelPDF from its new home screen icon.</li></> : safari ? <><li>Open the Safari File menu.</li><li>Choose Add to Dock, then confirm Add.</li><li>Launch PixelPDF from the Dock.</li></> : <><li>Open your browser menu or the install icon beside the address bar.</li><li>Choose Install PixelPDF, Install app or Add to Home Screen.</li><li>If that option is absent, try Chrome or Edge over HTTPS. The browser decides when installation is available.</li></>}
+        </ol>
+        <div className="mt-5 rounded-2xl bg-slate-50 p-4"><p className="text-sm font-semibold">Keep tools ready offline</p><p className="mt-1 text-xs leading-relaxed text-slate-500">Download the scan engine and five language packs once (about 50 MB). Wait for Offline ready before disconnecting. Device storage may be cleared by your browser.</p><button type="button" onClick={prepareOffline} disabled={offline === 'preparing' || offline === 'ready'} className="mt-3 rounded-lg border border-violet-200 bg-white px-3 py-2 text-xs font-bold text-violet-700 disabled:opacity-60">{offline === 'ready' ? 'Offline ready' : offline === 'preparing' ? `Preparing ${progress}%` : 'Prepare offline tools'}</button></div>
+      </>}
+      <button type="button" onClick={() => setDialog(null)} className="mt-4 w-full rounded-xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-600">{dialog === 'update' ? 'Keep working' : 'Keep using the website'}</button>
+    </dialog>}
+  </>;
+}
 
 function ActiveTool({ activeTab }) {
   switch (activeTab) {
@@ -141,9 +305,9 @@ export default function App() {
 
 
   return (
-    <div className="min-h-screen w-full bg-[radial-gradient(circle_at_top_left,_rgba(124,58,237,.08),_transparent_32%),radial-gradient(circle_at_top_right,_rgba(37,99,235,.08),_transparent_30%)] flex flex-col font-sans">
+    <div className="min-h-screen min-h-[100dvh] w-full bg-[radial-gradient(circle_at_top_left,_rgba(124,58,237,.08),_transparent_32%),radial-gradient(circle_at_top_right,_rgba(37,99,235,.08),_transparent_30%)] flex flex-col font-sans">
       {/* Sticky Universal Header */}
-      <header className="sticky top-0 z-40 border-b border-slate-200/80 bg-white/95 backdrop-blur-md">
+      <header style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }} className="sticky top-0 z-40 border-b border-slate-200/80 bg-white/95 backdrop-blur-md">
         <div className="mx-auto max-w-7xl px-3 py-2.5 sm:px-6 lg:px-8">
           <div className="flex min-w-0 items-center justify-between gap-2">
             {/* Brand Logo & Name */}
@@ -265,9 +429,11 @@ export default function App() {
           </div>
         </div>
 
+        <InstallAppPanel />
+
         {/* Mobile Dropdown Grid Sheet */}
         {mobileMenuOpen && (
-          <nav id="mobile-tools" aria-label="Mobile tools switcher" className="max-h-[calc(100dvh-80px)] overflow-y-auto overscroll-contain border-t border-slate-100 bg-white/95 px-3 py-3 backdrop-blur-md lg:hidden animate-in fade-in slide-in-from-top-2">
+          <nav id="mobile-tools" aria-label="Mobile tools switcher" className="max-h-[calc(100dvh-140px)] overflow-y-auto overscroll-contain border-t border-slate-100 bg-white/95 px-3 py-3 backdrop-blur-md lg:hidden animate-in fade-in slide-in-from-top-2">
             <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider px-1 mb-2">
               Choose Toolkit Feature
             </p>
@@ -343,7 +509,7 @@ export default function App() {
         <ActiveTool activeTab={activeTab} />
       </main>
 
-      <footer className="mx-auto max-w-7xl w-full px-4 pb-6 pt-2 text-center text-xs text-slate-400 sm:px-6 lg:px-8">
+      <footer style={{ paddingBottom: 'max(24px, env(safe-area-inset-bottom, 0px))' }} className="mx-auto max-w-7xl w-full px-4 pb-6 pt-2 text-center text-xs text-slate-400 sm:px-6 lg:px-8">
         © {new Date().getFullYear()} PixelPDF · Browser-based PDF utilities
       </footer>
     </div>

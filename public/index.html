@@ -3,22 +3,27 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <meta name="theme-color" content="#0f172a" />
+    <meta name="theme-color" content="#7c3aed" />
+    <meta name="application-name" content="PixelPDF" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="PixelPDF" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="mobile-web-app-capable" content="yes" />
     <meta name="color-scheme" content="light" />
 
     <!-- Google Site Verification -->
     <meta name="google-site-verification" content="J9iqgZ1cbe8oOP1DqTplMqZ5J7JyEPL23DUnXcjTHGg" />
 
     <!-- Primary Meta Tags -->
-    <title>PixelPDF — Free Online Text, Image & PDF Editor</title>
-    <meta name="title" content="PixelPDF — Free Online Text, Image & PDF Editor" />
+    <title>PixelPDF — Private PDF & Document Workspace</title>
+    <meta name="title" content="PixelPDF — Private PDF & Document Workspace" />
     <meta
       name="description"
-      content="PixelPDF is a fast, privacy-focused browser toolkit to edit PDF text, convert images to PDF, sign documents, compress images, and merge or split PDF files client-side."
+      content="PixelPDF is a fast, privacy-focused browser toolkit to scan documents, extract PDF text, convert images to PDF, sign documents, compress images, and merge or split PDF files client-side."
     />
     <meta
       name="keywords"
-      content="PixelPDF, PDF editor online, edit PDF text, convert image to PDF, text to PDF, sign PDF, freehand PDF, merge PDF, split PDF, image compressor, PDF to image"
+      content="PixelPDF, scan to text, handwriting OCR, PDF to text, convert image to PDF, text to PDF, sign PDF, freehand PDF, merge PDF, split PDF, image compressor, PDF to image"
     />
     <meta name="author" content="PixelPDF" />
     <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
@@ -29,7 +34,7 @@
 
     <!-- Favicon & Icons -->
     <link rel="icon" href="%PUBLIC_URL%/favicon.ico" sizes="any" />
-    <link rel="apple-touch-icon" href="https://pixelpdf-opal.vercel.app/logo.png" />
+    <link rel="apple-touch-icon" href="%PUBLIC_URL%/icons/icon-180.png" sizes="180x180" />
     <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
 
     <!-- Open Graph / Facebook -->
@@ -37,10 +42,10 @@
     <meta property="og:locale" content="en_US" />
     <meta property="og:site_name" content="PixelPDF" />
     <meta property="og:url" content="https://pixelpdf-opal.vercel.app/" />
-    <meta property="og:title" content="PixelPDF — Free Online Text, Image & PDF Editor" />
+    <meta property="og:title" content="PixelPDF — Private PDF & Document Workspace" />
     <meta
       property="og:description"
-      content="Edit existing PDF text directly in your browser, convert images to PDF, sign documents, and export styled PDFs without server uploads."
+      content="Scan documents and extract PDF text in your browser, convert images to PDF, sign documents, and export styled PDFs without server uploads."
     />
     <meta property="og:image" content="https://pixelpdf-opal.vercel.app/logo.png" />
     <meta property="og:image:secure_url" content="https://pixelpdf-opal.vercel.app/logo.png" />
@@ -50,10 +55,10 @@
     <!-- Twitter Cards -->
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:url" content="https://pixelpdf-opal.vercel.app/" />
-    <meta name="twitter:title" content="PixelPDF — Free Online Text, Image & PDF Editor" />
+    <meta name="twitter:title" content="PixelPDF — Private PDF & Document Workspace" />
     <meta
       name="twitter:description"
-      content="Fast, private in-browser PDF utilities: edit existing text, convert JPG/PNG to PDF, sign documents, and compress files locally."
+      content="Fast, private in-browser PDF utilities: scan documents, extract text, convert JPG/PNG to PDF, sign documents, and compress files locally."
     />
     <meta name="twitter:image" content="https://pixelpdf-opal.vercel.app/logo.png" />
 
@@ -68,7 +73,7 @@
           "applicationCategory": "UtilitiesApplication",
           "operatingSystem": "All",
           "browserRequirements": "Requires JavaScript. Requires HTML5 support.",
-          "description": "Browser-based privacy-friendly PDF tools for editing PDF text, combining images into PDF, digital signatures, freehand drawing, image compression, and converting PDF pages to images.",
+          "description": "Browser-based privacy-friendly PDF tools for scanning documents, extracting text, combining images into PDF, digital signatures, freehand drawing, image compression, and converting PDF pages to images.",
           "image": "https://pixelpdf-opal.vercel.app/logo.png",
           "offers": {
             "@type": "Offer",
@@ -95,8 +100,8 @@
             {
               "@type": "SiteNavigationElement",
               "position": 3,
-              "name": "PDF Editor",
-              "url": "https://pixelpdf-opal.vercel.app/PdfEditor"
+              "name": "PDF to Text",
+              "url": "https://pixelpdf-opal.vercel.app/PdfToText"
             },
             {
               "@type": "SiteNavigationElement",
@@ -127,11 +132,36 @@
               "position": 8,
               "name": "PDF to Image Converter",
               "url": "https://pixelpdf-opal.vercel.app/PdfToImage"
+            },
+            {
+              "@type": "SiteNavigationElement",
+              "position": 9,
+              "name": "Scan to Document",
+              "url": "https://pixelpdf-opal.vercel.app/ScanToDocument"
             }
           ]
         }
       ]
     </script>
+    <script>
+      window.pixelpdfInstallPrompt = null;
+      window.addEventListener('beforeinstallprompt', function (event) {
+        event.preventDefault();
+        window.pixelpdfInstallPrompt = event;
+        window.dispatchEvent(new Event('pixelpdf-install-ready'));
+      });
+      window.addEventListener('appinstalled', function () { window.pixelpdfInstallPrompt = null; });
+    </script>
+    <style>
+      html { min-height: 100%; background: #f8fafc; }
+      body { min-width: 280px; }
+      button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
+      button:focus-visible, a:focus-visible { outline: 3px solid #a78bfa; outline-offset: 3px; }
+      dialog::backdrop { background: rgba(15, 23, 42, .5); backdrop-filter: blur(4px); }
+      @media (prefers-reduced-motion: reduce) {
+        *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; }
+      }
+    </style>
   </head>
   <body>
     <!-- Crawlable Static Sitemap Links for Googlebot Discovery -->
@@ -144,7 +174,8 @@
         <ul>
           <li><a href="https://pixelpdf-opal.vercel.app/TextToPdf">Text to PDF Converter</a></li>
           <li><a href="https://pixelpdf-opal.vercel.app/ImageToPdf">Image to PDF Converter</a></li>
-          <li><a href="https://pixelpdf-opal.vercel.app/PdfEditor">Online PDF Editor</a></li>
+          <li><a href="https://pixelpdf-opal.vercel.app/PdfToText">PDF to Text</a></li>
+          <li><a href="https://pixelpdf-opal.vercel.app/ScanToDocument">Scan to Document</a></li>
           <li><a href="https://pixelpdf-opal.vercel.app/DigitalSignaturePdf">Sign PDF Documents</a></li>
           <li><a href="https://pixelpdf-opal.vercel.app/FreehandPad">Freehand Notes and Drawing Pad</a></li>
           <li><a href="https://pixelpdf-opal.vercel.app/MergeSplitPdf">Merge and Split PDF Pages</a></li>

@@ -70,12 +70,21 @@ const tabToPath = {
 function isAppWindow() {
   return Boolean(window.matchMedia?.('(display-mode: standalone)').matches || window.navigator.standalone);
 }
+const installMemoryKey = () => `pixelpdf-installed:${new URL(`${process.env.PUBLIC_URL || ''}/`, window.location.origin).pathname}`;
+function remembersInstallation() {
+  try { return localStorage.getItem(installMemoryKey()) === '1'; } catch { return false; }
+}
+function saveInstallation(value) {
+  try { if (value) localStorage.setItem(installMemoryKey(), '1'); else localStorage.removeItem(installMemoryKey()); } catch { /* Private browsing may block storage. */ }
+}
 export function InstallAppPanel() {
   const [appMode, setAppMode] = useState(isAppWindow);
-  const [installed, setInstalled] = useState(isAppWindow);
+  const [installed, setInstalled] = useState(() => isAppWindow() || remembersInstallation());
+  const [checkingInstall, setCheckingInstall] = useState(() => typeof navigator.getInstalledRelatedApps === 'function');
   const [online, setOnline] = useState(() => navigator.onLine);
   const [offline, setOffline] = useState('idle');
   const [progress, setProgress] = useState(0);
+  const [download, setDownload] = useState({ phase: 'Checking app setup', bytes: 0, file: '' });
   const [message, setMessage] = useState('');
   const [dialog, setDialog] = useState(null);
   const [prompting, setPrompting] = useState(false);
@@ -86,6 +95,10 @@ export function InstallAppPanel() {
   const mounted = useRef(true), offlinePort = useRef(null), reloading = useRef(false), wasDialogOpen = useRef(false), preparingRef = useRef(false), setupTimer = useRef(null);
   const baseURL = new URL(`${process.env.PUBLIC_URL || ''}/`, window.location.origin);
 
+  function rememberInstalled() {
+    saveInstallation(true); setInstalled(true); setCheckingInstall(false);
+    promptRef.current = null; window.pixelpdfInstallPrompt = null; setCanPrompt(false);
+  }
   function send(worker, data, handle) {
     if (!worker) return;
     const channel = new MessageChannel();
@@ -96,6 +109,23 @@ export function InstallAppPanel() {
     worker.postMessage(data, [channel.port2]);
     return channel.port1;
   }
+  function resetSetupTimer() {
+    clearTimeout(setupTimer.current);
+    setupTimer.current = setTimeout(() => handleSetup({ type: 'ERROR', message: 'No download data arrived for 90 seconds. Check your connection and retry; completed files are saved.' }), 90000);
+  }
+  function handleSetup(data) {
+    if (!mounted.current || !preparingRef.current) return;
+    if (['PHASE', 'BYTES', 'PROGRESS', 'SETUP_PROGRESS'].includes(data.type)) {
+      resetSetupTimer();
+      if (data.type === 'PROGRESS') setProgress(data.progress);
+      setDownload(previous => ({ ...previous, ...(data.phase ? { phase: data.phase, bytes: 0, file: '' } : {}), ...(data.bytes !== undefined ? { bytes: data.bytes } : {}), ...(data.file ? { file: data.file } : {}), ...(data.total ? { completed: data.completed, total: data.total } : {}) }));
+    }
+    if (data.type === 'READY' || data.type === 'ERROR' || data.type === 'SETUP_ERROR') {
+      clearTimeout(setupTimer.current); preparingRef.current = false; offlinePort.current?.close();
+      setOffline(data.type === 'READY' ? 'ready' : 'error'); setMessage(data.type === 'READY' ? '' : data.message);
+      if (data.type === 'READY') setProgress(100);
+    }
+  }
   async function prepareOffline() {
     if (preparingRef.current) return;
     if (!navigator.onLine) { setMessage('Connect to the internet once to prepare offline use.'); return; }
@@ -103,38 +133,58 @@ export function InstallAppPanel() {
       setMessage('Offline setup needs HTTPS and a browser that supports service workers.'); return;
     }
     preparingRef.current = true;
-    setOffline('preparing'); setProgress(0); setMessage('');
+    setOffline('preparing'); setProgress(0); setMessage(''); setDownload({ phase: 'Checking app setup', bytes: 0, file: '' }); resetSetupTimer();
     try {
-      // Best effort: supported browsers may retain app assets more reliably.
       navigator.storage?.persist?.().catch(() => {});
       const ready = await Promise.race([navigator.serviceWorker.ready, new Promise((_, reject) => setTimeout(() => reject(new Error('App setup is not ready. Reload while online and try again.')), 30000))]);
-      if (!mounted.current) return;
+      if (!mounted.current || !preparingRef.current) return;
       offlinePort.current?.close();
-      setupTimer.current = setTimeout(() => { preparingRef.current = false; offlinePort.current?.close(); if (mounted.current) { setOffline('error'); setMessage('Offline setup paused. Reconnect and use Prepare offline to retry.'); } }, 300000);
-      offlinePort.current = send(ready.active, { type: 'PREPARE_OFFLINE' }, data => {
-        if (data.type === 'PROGRESS') setProgress(data.progress);
-        if (data.type === 'READY') { clearTimeout(setupTimer.current); preparingRef.current = false; setOffline('ready'); setProgress(100); setMessage(''); }
-        if (data.type === 'ERROR') { clearTimeout(setupTimer.current); preparingRef.current = false; setOffline('error'); setMessage(data.message); }
-      });
-    } catch (error) { preparingRef.current = false; if (mounted.current) { setOffline('error'); setMessage(error.message || 'Offline setup is unavailable.'); } }
+      offlinePort.current = send(ready.active, { type: 'PREPARE_OFFLINE' }, handleSetup);
+    } catch (error) { handleSetup({ type: 'ERROR', message: error.message || 'Offline setup is unavailable.' }); }
   }
   useEffect(() => {
     mounted.current = true;
-    const onInstallReady = () => { promptRef.current = window.pixelpdfInstallPrompt; setCanPrompt(Boolean(promptRef.current)); };
-    const onInstalled = () => { promptRef.current = null; setCanPrompt(false); setInstalled(true); setDialog(null); prepareOffline(); };
-    const onNetwork = () => setOnline(navigator.onLine);
+    const onInstallReady = () => { if (isAppWindow()) return; saveInstallation(false); setInstalled(false); setCheckingInstall(false); promptRef.current = window.pixelpdfInstallPrompt; setCanPrompt(Boolean(promptRef.current)); };
+    const onInstalled = () => { rememberInstalled(); setDialog(null); prepareOffline(); };
+    let lastUpdateCheck = 0;
+    const checkForUpdate = () => { if (!navigator.onLine || !registration.current || Date.now() - lastUpdateCheck < 60000) return; lastUpdateCheck = Date.now(); registration.current.update().catch(() => {}); };
+    const onNetwork = () => { setOnline(navigator.onLine); if (navigator.onLine) checkForUpdate(); };
     const mode = window.matchMedia?.('(display-mode: standalone)');
-    const onMode = () => { const value = isAppWindow(); setAppMode(value); if (value) setInstalled(true); };
+    const onMode = () => { const value = isAppWindow(); setAppMode(value); if (value) rememberInstalled(); };
+    let installCheck = 0;
+    const detectInstallation = async () => {
+      const check = ++installCheck;
+      if (isAppWindow()) { rememberInstalled(); return; }
+      if (typeof navigator.getInstalledRelatedApps !== 'function') { setCheckingInstall(false); return; }
+      let timeout;
+      try {
+        const apps = await Promise.race([navigator.getInstalledRelatedApps(), new Promise(resolve => { timeout = setTimeout(() => resolve([]), 2000); })]);
+        if (!mounted.current || check !== installCheck) return;
+        const manifestURL = new URL('manifest.json', baseURL).href;
+        if (apps.some(app => app.platform === 'webapp' && ((app.url && new URL(app.url, baseURL).href === manifestURL) || (app.id && new URL(app.id, baseURL).href === baseURL.href)))) rememberInstalled();
+      } catch { /* Use saved confirmation where detection is unsupported. */ }
+      finally { clearTimeout(timeout); if (mounted.current && check === installCheck) setCheckingInstall(false); }
+    };
+    const onVisibility = () => { if (document.visibilityState === 'visible') { detectInstallation(); checkForUpdate(); } };
+    const onStorage = event => { if (event.key === installMemoryKey()) { setInstalled(isAppWindow() || remembersInstallation()); if (event.newValue === '1') { promptRef.current = null; setCanPrompt(false); setDialog(null); } } };
+    if (isAppWindow()) rememberInstalled();
+    // A fresh native prompt means installation is available again (for example after uninstall).
+    if (window.pixelpdfInstallPrompt && !isAppWindow()) onInstallReady();
+    detectInstallation();
+    window.addEventListener('storage', onStorage);
+    document.addEventListener('visibilitychange', onVisibility);
     window.addEventListener('pixelpdf-install-ready', onInstallReady);
     window.addEventListener('appinstalled', onInstalled);
     window.addEventListener('online', onNetwork); window.addEventListener('offline', onNetwork);
     mode?.addEventListener?.('change', onMode);
+    const onSetupMessage = event => { if (event.data?.channel === 'pixelpdf-offline') handleSetup(event.data); };
     const onController = () => {
       if (reloading.current) { window.location.reload(); return; }
       send(navigator.serviceWorker.controller, { type: 'STATUS' }, data => { if (data.ready) setOffline('ready'); });
     };
     if (process.env.NODE_ENV === 'production' && window.isSecureContext && 'serviceWorker' in navigator) {
       navigator.serviceWorker.addEventListener('controllerchange', onController);
+      navigator.serviceWorker.addEventListener('message', onSetupMessage);
       const script = [...document.scripts].map(item => item.src).find(src => /\/main\.[^/]+\.js$/.test(src));
       const build = script ? new URL(script).pathname.split('/').pop() : 'v1';
       navigator.serviceWorker.register(new URL(`sw.js?build=${encodeURIComponent(build)}`, baseURL), { scope: baseURL.pathname, updateViaCache: 'none' })
@@ -154,12 +204,15 @@ export function InstallAppPanel() {
         }).catch(() => { if (mounted.current) setMessage('Offline setup is unavailable. You can keep using the tools online.'); });
     }
     return () => {
-      mounted.current = false; offlinePort.current?.close(); clearTimeout(setupTimer.current);
+      mounted.current = false; installCheck++;
+      window.removeEventListener('storage', onStorage); document.removeEventListener('visibilitychange', onVisibility);
+      offlinePort.current?.close(); clearTimeout(setupTimer.current);
       window.removeEventListener('pixelpdf-install-ready', onInstallReady);
       window.removeEventListener('appinstalled', onInstalled);
       window.removeEventListener('online', onNetwork); window.removeEventListener('offline', onNetwork);
       mode?.removeEventListener?.('change', onMode);
       navigator.serviceWorker?.removeEventListener('controllerchange', onController);
+      navigator.serviceWorker?.removeEventListener('message', onSetupMessage);
     };
     // Register once. Tools and menu state must not restart setup or install prompts.
   }, []);
@@ -202,12 +255,12 @@ export function InstallAppPanel() {
         </div>
         <div className="flex shrink-0 items-center gap-2">
           {updateReady && <button type="button" onClick={() => setDialog('update')} className="rounded-lg px-2 py-2 text-xs font-semibold text-violet-700 hover:bg-violet-50">Update available</button>}
-          {installed ? <span className="inline-flex items-center gap-1.5 rounded-full border border-violet-200 bg-white px-3 py-1.5 text-xs font-semibold text-violet-700"><ShieldCheck size={13} />{appMode ? 'App mode' : 'Installed'}</span> :
+          {installed ? <span className="inline-flex items-center gap-1.5 rounded-full border border-violet-200 bg-white px-3 py-1.5 text-xs font-semibold text-violet-700"><ShieldCheck size={13} />{appMode ? 'App mode' : 'Installed'}</span> : !checkingInstall &&
             <button ref={installButton} type="button" onClick={install} disabled={prompting} aria-label="Install PixelPDF app" title={canPrompt ? 'Install PixelPDF on this device' : 'How to install PixelPDF on this device'} className="inline-flex min-h-[36px] items-center gap-1.5 rounded-full bg-violet-600 px-3.5 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-violet-700 focus-visible:ring-4 focus-visible:ring-violet-200 disabled:opacity-60"><Download size={14} />{prompting ? 'Opening…' : 'Install app'}</button>}
-          {installed && offline !== 'ready' && offline !== 'preparing' && <button type="button" onClick={prepareOffline} className="rounded-lg px-2 py-2 text-xs font-semibold text-slate-600">Prepare offline</button>}
+          {(installed || offline === 'error') && offline !== 'ready' && offline !== 'preparing' && <button type="button" onClick={prepareOffline} className="rounded-lg px-2 py-2 text-xs font-semibold text-slate-600">{offline === 'error' ? 'Retry offline setup' : 'Prepare offline'}</button>}
         </div>
       </div>
-      {offline === 'preparing' && <div role="status" aria-live="polite" className="mx-auto max-w-7xl px-3 pb-2 text-xs text-slate-500 sm:px-6 lg:px-8">Preparing offline tools · {progress}%<div role="progressbar" aria-label="Offline tools download" aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100} className="mt-1 h-1 overflow-hidden rounded-full bg-violet-100"><div style={{width: `${progress}%`}} className="h-full bg-violet-500" /></div></div>}
+      {offline === 'preparing' && <div role="status" aria-live="polite" className="mx-auto max-w-7xl px-3 pb-2 text-xs text-slate-500 sm:px-6 lg:px-8">{download.phase}{download.file && ` · ${download.file}`}{download.bytes > 0 && ` · ${(download.bytes / 1048576).toFixed(1)} MB received`}{download.total && ` · ${download.completed}/${download.total} files ready`}<div role="progressbar" aria-label="Offline tools download" aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100} className="mt-1 h-1 overflow-hidden rounded-full bg-violet-100"><div style={{width: `${progress}%`}} className="h-full bg-violet-500" /></div></div>}
       {message && <p role="status" className="mx-auto max-w-7xl px-3 pb-2 text-xs text-amber-800 sm:px-6 lg:px-8">{message}</p>}
     </div>
     {dialog && <dialog ref={panel} aria-labelledby="install-title" onCancel={event => { event.preventDefault(); setDialog(null); }} onClick={event => { if (event.target === event.currentTarget) { const bounds = event.currentTarget.getBoundingClientRect(); if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) setDialog(null); } }} className="fixed max-h-[85dvh] w-[calc(100%_-_32px)] max-w-md overflow-y-auto rounded-3xl border border-slate-200 bg-white p-5 text-slate-800 shadow-2xl sm:p-7">
@@ -218,7 +271,8 @@ export function InstallAppPanel() {
         <ol className="mt-5 list-decimal space-y-2 pl-5 text-sm leading-relaxed text-slate-700">
           {appleMobile ? <><li>Open this site in Safari, then tap Share.</li><li>Choose Add to Home Screen, enable Open as Web App if shown, then tap Add.</li><li>Open PixelPDF from its new home screen icon.</li></> : safari ? <><li>Open the Safari File menu.</li><li>Choose Add to Dock, then confirm Add.</li><li>Launch PixelPDF from the Dock.</li></> : <><li>Open your browser menu or the install icon beside the address bar.</li><li>Choose Install PixelPDF, Install app or Add to Home Screen.</li><li>If that option is absent, try Chrome or Edge over HTTPS. The browser decides when installation is available.</li></>}
         </ol>
-        <div className="mt-5 rounded-2xl bg-slate-50 p-4"><p className="text-sm font-semibold">Keep tools ready offline</p><p className="mt-1 text-xs leading-relaxed text-slate-500">Download the scan engine and five language packs once (about 50 MB). Wait for Offline ready before disconnecting. Device storage may be cleared by your browser.</p><button type="button" onClick={prepareOffline} disabled={offline === 'preparing' || offline === 'ready'} className="mt-3 rounded-lg border border-violet-200 bg-white px-3 py-2 text-xs font-bold text-violet-700 disabled:opacity-60">{offline === 'ready' ? 'Offline ready' : offline === 'preparing' ? `Preparing ${progress}%` : 'Prepare offline tools'}</button></div>
+        <button type="button" onClick={() => { rememberInstalled(); setDialog(null); }} className="mt-4 rounded-lg px-2 py-2 text-xs font-semibold text-violet-700">I already installed PixelPDF</button>
+        <div className="mt-5 rounded-2xl bg-slate-50 p-4"><p className="text-sm font-semibold">Keep tools ready offline</p><p className="mt-1 text-xs leading-relaxed text-slate-500">Download the scan engine and five language packs once (about 50 MB). Wait for Offline ready before disconnecting. Device storage may be cleared by your browser.</p><button type="button" onClick={prepareOffline} disabled={offline === 'preparing' || offline === 'ready'} className="mt-3 rounded-lg border border-violet-200 bg-white px-3 py-2 text-xs font-bold text-violet-700 disabled:opacity-60">{offline === 'ready' ? 'Offline ready' : offline === 'preparing' ? 'Downloading…' : 'Prepare offline tools'}</button></div>
       </>}
       <button type="button" onClick={() => setDialog(null)} className="mt-4 w-full rounded-xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-600">{dialog === 'update' ? 'Keep working' : 'Keep using the website'}</button>
     </dialog>}

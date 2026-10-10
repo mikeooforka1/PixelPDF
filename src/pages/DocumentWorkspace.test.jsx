@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import DocumentWorkspace from './DocumentWorkspace';
 import { downloadDocument } from '../utils/documentExport';
@@ -14,8 +14,8 @@ test('scan cannot start empty, supports review and export', () => {
 });
 test('invalid files are rejected and camera permissions give actionable errors', async () => {
   render(<DocumentWorkspace />);
-  fireEvent.change(screen.getByLabelText('Document photos'), { target: { files: [new File(['bad'], 'bad.pdf', { type:'application/pdf' })] } });
-  expect(screen.getByRole('alert')).toHaveTextContent('Use JPG');
+  fireEvent.change(screen.getByLabelText('Document photos'), { target: { files: [new File(['bad'], 'bad.exe', { type:'application/octet-stream' })] } });
+  expect(await screen.findByRole('alert')).toHaveTextContent('unsupported format');
   fireEvent.click(screen.getByText('Open camera'));
   expect(await screen.findByRole('alert')).toHaveTextContent('Camera needs HTTPS');
 });

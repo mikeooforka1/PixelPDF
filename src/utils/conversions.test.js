@@ -1,0 +1,16 @@
+import {PDFDocument} from 'pdf-lib';
+import JSZip from 'jszip';
+import {parseRanges,columnIndex,parseXml,splitPdf,compressPdf,organizePdf,displayNumber,wrapText} from './conversions';
+const signal=new AbortController().signal;
+async function fixture(){const doc=await PDFDocument.create();doc.addPage([300,400]);doc.addPage([500,600]);doc.addPage([700,800]);const bytes=await doc.save();return{name:'pages.pdf',size:bytes.length,arrayBuffer:async()=>bytes.buffer};}
+test('page ranges are validated instead of silently ignoring invalid selections',()=>{expect(parseRanges('1-3, 2, 5',5)).toEqual([0,1,2,4]);for(const range of ['0','6','3-1','2x','1,'])expect(()=>parseRanges(range,5)).toThrow();});
+test('spreadsheet column indexes support multi-letter columns',()=>{expect(columnIndex('A1')).toBe(0);expect(columnIndex('AA42')).toBe(26);expect(()=>columnIndex('!')).toThrow();});
+test('Office XML rejects external entities and corrupted content',()=>{expect(()=>parseXml('<!DOCTYPE a><a/>')).toThrow();expect(()=>parseXml('<a>')).toThrow();expect(parseXml('<a/>').documentElement.localName).toBe('a');});
+test('split preserves requested page sizes in original order',async()=>{const result=await splitPdf(await fixture(),'1,3',false,signal);const bytes=await new Response(result.blob).arrayBuffer();const pdf=await PDFDocument.load(bytes);expect(pdf.getPageCount()).toBe(2);expect(pdf.getPage(1).getWidth()).toBe(700);});
+test('separate split creates a valid PDF for every ZIP entry',async()=>{const result=await splitPdf(await fixture(),'',true,signal);const zip=await JSZip.loadAsync(await new Response(result.blob).arrayBuffer());expect(Object.keys(zip.files)).toHaveLength(3);const doc=await PDFDocument.load(await zip.file('page-002.pdf').async('uint8array'));expect(doc.getPageCount()).toBe(1);expect(doc.getPage(0).getWidth()).toBe(500);});
+test('organize applies order and rotation without changing the source',async()=>{const file=await fixture();const result=await organizePdf(file,[{index:2,rotation:90},{index:0,rotation:0}],signal);const doc=await PDFDocument.load(await new Response(result.blob).arrayBuffer());expect(doc.getPageCount()).toBe(2);expect(doc.getPage(0).getWidth()).toBe(700);expect(doc.getPage(0).getRotation().angle).toBe(90);expect((await PDFDocument.load(await file.arrayBuffer())).getPageCount()).toBe(3);});
+test('lossless compression keeps the smaller original if rewriting grows it',async()=>{const result=await compressPdf(await fixture(),'lossless',signal);expect(result.extension).toBe('pdf');expect(result.blob.size).toBeLessThanOrEqual((await fixture()).size);});
+
+test('common saved spreadsheet numbers are displayed as dates, currency and percentages',()=>{expect(displayNumber('0.25','0%')).toBe('25%');expect(displayNumber('25','$0.00')).toBe('$25.00');expect(displayNumber('1','m/d/yy')).toBe('1900-01-01');expect(displayNumber('60','m/d/yy')).toBe('1900-02-29');});
+
+test('Office rendering refuses scripts that could become unreadable missing-glyph boxes',()=>{const context={measureText:value=>({width:value.length*10})};expect(()=>wrapText(context,'中文',200)).toThrow('supports Latin-script');expect(wrapText(context,'café résumé 12345',200)).toEqual(['café résumé 12345']);});

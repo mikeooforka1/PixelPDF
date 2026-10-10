@@ -20,10 +20,11 @@
   },
   "scripts": {
     "start": "react-scripts start",
-    "build": "react-scripts build",
+    "build": "node scripts/prepare-pwa.cjs && react-scripts build && node scripts/finalize-pwa.cjs",
     "test": "react-scripts test",
     "eject": "react-scripts eject",
-    "test:ci": "react-scripts test --watchAll=false --runInBand"
+    "test:ci": "react-scripts test --watchAll=false --runInBand",
+    "test:offline": "node --test scripts/test-offline.cjs"
   },
   "browserslist": {
     "production": [

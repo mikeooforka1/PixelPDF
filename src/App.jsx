@@ -15,6 +15,7 @@ import {
   ChevronDown, Home, Scissors, Minimize2, FileSpreadsheet, Presentation, LayoutGrid, ScanText, FileOutput
 } from 'lucide-react';
 import ToolHome from './pages/ToolHome';
+import ProtectPdf from './pages/ProtectPdf';
 import ConversionWorkspace from './pages/ConversionWorkspace';
 import DocumentWorkspace from './pages/DocumentWorkspace';
 import TextToPdf from './pages/TextToPdf';
@@ -38,6 +39,7 @@ const tabs = [
   {id:'mergesplit',label:'Merge & Split',icon:Layers,desc:'Join PDFs together or extract selected pages.',group:'pdf'},
   {id:'split',label:'Split PDF',icon:Scissors,desc:'Keep a page range or save each page as its own PDF.',group:'pdf'},
   {id:'compresspdf',label:'Compress PDF',icon:Minimize2,desc:'Make a PDF smaller for easier storage and sharing.',group:'pdf'},
+  {id:'protect',label:'Protect PDF',icon:ShieldCheck,desc:'Set a password required to open your downloaded PDF.',group:'pdf'},
   {id:'organize',label:'Organize PDF',icon:LayoutGrid,desc:'Reorder, rotate or remove pages from a PDF.',group:'pdf'},
   {id:'compressor',label:'Image Compressor',icon:Sliders,desc:'Reduce picture size and resize images.',group:'other'},
   {id:'pdftoimage',label:'PDF to Image',icon:FileArchive,desc:'Save a PDF page as a picture you can use elsewhere.',group:'other'},
@@ -53,6 +55,7 @@ const tabs = [
 // Map URL paths to tab keys
 const pathToTab = {
   '/': 'home',
+  '/ProtectPdf': 'protect',
   '/SplitPdf': 'split', '/CompressPdf': 'compresspdf', '/OrganizePdf': 'organize',
   '/WordToPdf': 'wordtopdf', '/ExcelToPdf': 'exceltopdf', '/PowerPointToPdf': 'powerpointtopdf',
   '/PdfToWord': 'pdftoword', '/PdfToPowerPoint': 'pdftopowerpoint',
@@ -70,7 +73,7 @@ const pathToTab = {
 
 // Map tab keys to clean URL paths
 const tabToPath = {
-  home:'/', split:'/SplitPdf', compresspdf:'/CompressPdf', organize:'/OrganizePdf',
+  protect:'/ProtectPdf', home:'/', split:'/SplitPdf', compresspdf:'/CompressPdf', organize:'/OrganizePdf',
   wordtopdf:'/WordToPdf', exceltopdf:'/ExcelToPdf', powerpointtopdf:'/PowerPointToPdf',
   pdftoword:'/PdfToWord', pdftopowerpoint:'/PdfToPowerPoint',
   scan: '/ScanToDocument',
@@ -326,6 +329,7 @@ export function InstallAppPanel() {
 
 function ActiveTool({ activeTab, onSelect }) {
   switch (activeTab) {
+    case 'protect': return <ProtectPdf />;
     case 'home': return <ToolHome tools={tabs.filter(tool=>tool.id!=='home')} onSelect={onSelect}/>;
     case 'split': case 'compresspdf': case 'organize': case 'wordtopdf': case 'exceltopdf': case 'powerpointtopdf': case 'pdftopowerpoint': return <ConversionWorkspace key={activeTab} kind={activeTab}/>;
     case 'pdftoword': return <DocumentWorkspace key="word" kind="word"/>;

@@ -12,12 +12,15 @@ import {
   ChevronRight,
   Check,
   Edit3,
-  Layers
+  Layers,
+  ZoomIn,
+  ZoomOut
 } from 'lucide-react';
 import { PDFDocument, StandardFonts, rgb, degrees } from 'pdf-lib';
-import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf';
+import * as pdfjsLib from 'pdfjs-dist';
 
-pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+// Use the dynamic version matching your installed package to prevent setup/worker errors
+pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
 
 const fileToBytes = (file) => file.arrayBuffer();
 
@@ -29,6 +32,7 @@ export default function PdfEditor() {
   const [pages, setPages] = useState([]);
   const [page, setPage] = useState(1);
   const [scaleFactor, setScaleFactor] = useState(1);
+  const [zoomLevel, setZoomLevel] = useState(100); // Zoom percentage (50% to 300%)
   const [viewportDims, setViewportDims] = useState({ width: 0, height: 0 });
 
   // Extracted existing text from the PDF
@@ -36,6 +40,10 @@ export default function PdfEditor() {
   // Overlays / edits made to original text or added items
   const [overlays, setOverlays] = useState([]);
   const [selectedOverlayId, setSelectedOverlayId] = useState(null);
+
+  // Dragging state for free positioning
+  const [draggingId, setDraggingId] = useState(null);
+  const dragOffsetRef = useRef({ x: 0, y: 0 });
 
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -56,7 +64,7 @@ export default function PdfEditor() {
   const canvasRef = useRef(null);
   const wrapRef = useRef(null);
 
-  // Extract page content & render canvas
+  // Extract page content & render canvas honoring A4 proportions and zoom
   const renderCurrentPage = useCallback(async () => {
     if (!pdf || !canvasRef.current || !wrapRef.current) return;
     setLoading(true);
@@ -64,11 +72,13 @@ export default function PdfEditor() {
       const pageDoc = await pdf.getPage(page);
       const base = pageDoc.getViewport({ scale: 1 });
       const containerWidth = wrapRef.current.clientWidth || 800;
-      // Allow scale up to 1.5x on desktop, fit nicely on mobile screens
-      const fitScale = Math.min((containerWidth - 24) / base.width, 1.4);
-      setScaleFactor(fitScale);
+      
+      // Standard fit scale combined with user zoom level multiplier
+      const baseFitScale = Math.min((containerWidth - 24) / base.width, 1.2);
+      const currentScale = baseFitScale * (zoomLevel / 100);
+      setScaleFactor(currentScale);
 
-      const viewport = pageDoc.getViewport({ scale: fitScale });
+      const viewport = pageDoc.getViewport({ scale: currentScale });
       setViewportDims({ width: viewport.width, height: viewport.height });
 
       const canvas = canvasRef.current;
@@ -87,11 +97,10 @@ export default function PdfEditor() {
       const items = textContent.items
         .filter((item) => item.str && item.str.trim().length > 0)
         .map((item, idx) => {
-          // Transform PDF matrix coordinates to viewport pixels
           const tx = pdfjsLib.Util.transform(viewport.transform, item.transform);
           const fontHeight = Math.hypot(tx[2], tx[3]);
           const x = tx[4];
-          const y = tx[5] - fontHeight; // convert baseline to top coordinate
+          const y = tx[5] - fontHeight;
 
           return {
             id: `orig-${page}-${idx}`,
@@ -100,7 +109,7 @@ export default function PdfEditor() {
             text: item.str,
             x: Math.round(x),
             y: Math.max(0, Math.round(y)),
-            width: Math.round(item.width * fitScale),
+            width: Math.round(item.width * currentScale),
             height: Math.max(14, Math.round(fontHeight)),
             size: Math.max(10, Math.round(fontHeight)),
           };
@@ -110,13 +119,12 @@ export default function PdfEditor() {
     } finally {
       setLoading(false);
     }
-  }, [pdf, page]);
+  }, [pdf, page, zoomLevel]);
 
   useEffect(() => {
     renderCurrentPage();
   }, [renderCurrentPage]);
 
-  // Window resize listener
   useEffect(() => {
     const handleResize = () => {
       if (pdf) renderCurrentPage();
@@ -142,9 +150,7 @@ export default function PdfEditor() {
     setLoading(false);
   };
 
-  // Start editing existing text extracted from PDF
   const editOriginalText = (item) => {
-    // Check if there is already an existing edit overlay for this item
     const existing = overlays.find((o) => o.targetId === item.id);
     if (existing) {
       setSelectedOverlayId(existing.id);
@@ -196,7 +202,7 @@ export default function PdfEditor() {
   };
 
   const handleCanvasClick = (e) => {
-    if (!canvasRef.current) return;
+    if (!canvasRef.current || draggingId) return;
     const rect = canvasRef.current.getBoundingClientRect();
     const clickX = Math.round(e.clientX - rect.left);
     const clickY = Math.round(e.clientY - rect.top);
@@ -215,6 +221,74 @@ export default function PdfEditor() {
       originalHeight: 0,
     });
   };
+
+  // Drag and Drop handlers for free positioning anywhere
+  const handleMouseDown = (e, overlayId) => {
+    e.stopPropagation();
+    setSelectedOverlayId(overlayId);
+    const overlay = overlays.find((o) => o.id === overlayId);
+    if (!overlay) return;
+
+    setDraggingId(overlayId);
+    dragOffsetRef.current = {
+      x: e.clientX - overlay.x,
+      y: e.clientY - overlay.y,
+    };
+  };
+
+  const handleTouchStart = (e, overlayId) => {
+    e.stopPropagation();
+    setSelectedOverlayId(overlayId);
+    const overlay = overlays.find((o) => o.id === overlayId);
+    if (!overlay || !e.touches[0]) return;
+
+    setDraggingId(overlayId);
+    dragOffsetRef.current = {
+      x: e.touches[0].clientX - overlay.x,
+      y: e.touches[0].clientY - overlay.y,
+    };
+  };
+
+  const handleMouseMove = useCallback((e) => {
+    if (!draggingId) return;
+    const clientX = e.clientX || (e.touches && e.touches[0]?.clientX);
+    const clientY = e.clientY || (e.touches && e.touches[0]?.clientY);
+    if (clientX === undefined || clientY === undefined) return;
+
+    const newX = Math.round(clientX - dragOffsetRef.current.x);
+    const newY = Math.round(clientY - dragOffsetRef.current.y);
+
+    setOverlays((prev) =>
+      prev.map((o) => {
+        if (o.id === draggingId) {
+          return { ...o, x: newX, y: newY };
+        }
+        return o;
+      })
+    );
+
+    // Sync form if selected
+    setForm((prev) => ({ ...prev, x: newX, y: newY }));
+  }, [draggingId]);
+
+  const handleMouseUp = useCallback(() => {
+    setDraggingId(null);
+  }, []);
+
+  useEffect(() => {
+    if (draggingId) {
+      window.addEventListener('mousemove', handleMouseMove);
+      window.addEventListener('mouseup', handleMouseUp);
+      window.addEventListener('touchmove', handleMouseMove);
+      window.addEventListener('touchend', handleMouseUp);
+    }
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+      window.removeEventListener('touchmove', handleMouseMove);
+      window.removeEventListener('touchend', handleMouseUp);
+    };
+  }, [draggingId, handleMouseMove, handleMouseUp]);
 
   const saveFormOverlay = () => {
     if (!form.text.trim()) return;
@@ -287,7 +361,6 @@ export default function PdfEditor() {
         const normalizedY = o.y / factor;
         const normalizedSize = o.size / factor;
 
-        // If this is an existing text edit, white-out the original text first
         if (o.isExistingEdit && o.originalWidth && o.originalHeight) {
           const normW = o.originalWidth / factor;
           const normH = o.originalHeight / factor;
@@ -363,20 +436,44 @@ export default function PdfEditor() {
             </div>
 
             {file && (
-              <button
-                type="button"
-                className="btn-secondary self-start sm:self-auto shrink-0 text-xs sm:text-sm py-1.5 px-3"
-                onClick={() => {
-                  setFile(null);
-                  setPdf(null);
-                  setPdfBytes(null);
-                  setPages([]);
-                  setOverlays([]);
-                  setExtractedItems([]);
-                }}
-              >
-                <FileUp size={14} /> Change File
-              </button>
+              <div className="flex items-center gap-2">
+                {/* Zoom Controls */}
+                <div className="flex items-center bg-white rounded-lg border border-slate-200 shadow-2xs">
+                  <button
+                    type="button"
+                    onClick={() => setZoomLevel((z) => Math.max(50, z - 25))}
+                    className="p-1.5 text-slate-600 hover:text-violet-700 hover:bg-slate-50 rounded-l-lg"
+                    title="Zoom out"
+                  >
+                    <ZoomOut size={15} />
+                  </button>
+                  <span className="px-2 text-xs font-semibold text-slate-700">{zoomLevel}%</span>
+                  <button
+                    type="button"
+                    onClick={() => setZoomLevel((z) => Math.min(300, z + 25))}
+                    className="p-1.5 text-slate-600 hover:text-violet-700 hover:bg-slate-50 rounded-r-lg"
+                    title="Zoom in"
+                  >
+                    <ZoomIn size={15} />
+                  </button>
+                </div>
+
+                <button
+                  type="button"
+                  className="btn-secondary text-xs sm:text-sm py-1.5 px-3"
+                  onClick={() => {
+                    setFile(null);
+                    setPdf(null);
+                    setPdfBytes(null);
+                    setPages([]);
+                    setOverlays([]);
+                    setExtractedItems([]);
+                    setZoomLevel(100);
+                  }}
+                >
+                  <FileUp size={14} /> Change File
+                </button>
+              </div>
             )}
           </div>
         </div>
@@ -388,31 +485,33 @@ export default function PdfEditor() {
               <UploadCloud className="text-violet-600" size={30} />
             </div>
             <p className="mt-4 font-bold text-slate-800">Upload a PDF to start editing</p>
-            <p className="mt-1 text-xs sm:text-sm text-slate-500">Edit existing words or stamp new annotations.</p>
+            <p className="mt-1 text-xs sm:text-sm text-slate-500">Edit existing words or drag new text anywhere on A4 pages.</p>
           </label>
         ) : (
-          <div className="bg-slate-100/90 p-2 sm:p-5 flex flex-col items-center select-none overflow-x-auto">
+          <div className="bg-slate-100/90 p-2 sm:p-5 flex flex-col items-center select-none overflow-auto max-h-[75vh]">
             <div className="mb-2 text-center text-xs text-slate-500 flex items-center justify-center gap-1.5 px-2">
               <Edit3 size={13} className="text-violet-600 shrink-0" />
-              <span>Click on any text on the page to edit, or click empty space to add new text</span>
+              <span>Click text to edit, click empty space to add text, or drag added text anywhere</span>
             </div>
 
-            {/* Canvas + Interactive Overlays Layer */}
+            {/* A4 Canvas + Interactive Overlays Layer */}
             <div
               ref={wrapRef}
               onClick={handleCanvasClick}
-              className="relative max-w-full overflow-hidden rounded-xl border border-slate-300 bg-white shadow-md cursor-crosshair touch-pan-x touch-pan-y"
+              className="relative overflow-hidden rounded-xl border border-slate-300 bg-white shadow-md cursor-crosshair"
               style={{
                 width: viewportDims.width || 'auto',
                 height: viewportDims.height || 'auto',
+                minWidth: viewportDims.width || 'auto',
+                minHeight: viewportDims.height || 'auto',
               }}
             >
               <canvas ref={canvasRef} className="block select-none pointer-events-none" />
 
-              {/* Extracted Existing Text Layer (Clickable hotspots over existing text) */}
+              {/* Extracted Existing Text Layer */}
               {currentExtracted.map((item) => {
                 const isOverridden = currentOverlays.some((o) => o.targetId === item.id);
-                if (isOverridden) return null; // Hidden by an active edit overlay
+                if (isOverridden) return null;
 
                 return (
                   <button
@@ -434,10 +533,12 @@ export default function PdfEditor() {
                 );
               })}
 
-              {/* Active User Edits and Overlays */}
+              {/* Active User Edits and Overlays (Draggable & Positionable anywhere) */}
               {currentOverlays.map((o) => (
                 <div
                   key={o.id}
+                  onMouseDown={(e) => handleMouseDown(e, o.id)}
+                  onTouchStart={(e) => handleTouchStart(e, o.id)}
                   onClick={(e) => {
                     e.stopPropagation();
                     setSelectedOverlayId(o.id);
@@ -454,12 +555,12 @@ export default function PdfEditor() {
                       originalHeight: o.originalHeight,
                     });
                   }}
-                  className={`absolute cursor-pointer px-1 py-0.5 rounded font-sans transition-all leading-none ${
+                  className={`absolute cursor-move px-1.5 py-0.5 rounded font-sans transition-shadow leading-none ${
                     selectedOverlayId === o.id
-                      ? 'ring-2 ring-violet-600 bg-white shadow-sm z-20'
+                      ? 'ring-2 ring-violet-600 bg-white/95 shadow-md z-20'
                       : o.isExistingEdit
                       ? 'bg-white text-slate-900 shadow-2xs z-10'
-                      : 'hover:ring-1 hover:ring-slate-400 z-10'
+                      : 'bg-white/70 hover:bg-white shadow-2xs hover:ring-1 hover:ring-slate-400 z-10'
                   }`}
                   style={{
                     left: o.x,
@@ -493,7 +594,7 @@ export default function PdfEditor() {
                 <ChevronLeft size={16} /> Prev
               </button>
               <span className="text-xs font-semibold text-slate-700 whitespace-nowrap px-2">
-                Page {page} of {pages.length}
+                Page {page} of {pages.length} (A4)
               </span>
               <button
                 type="button"
@@ -517,7 +618,7 @@ export default function PdfEditor() {
         <p className="mt-1 text-xs text-slate-500">
           {form.isExistingEdit
             ? 'Updating this replaces the original text seamlessly with white-out redaction.'
-            : 'Type text below and click apply or tap anywhere on the canvas.'}
+            : 'Type text, position anywhere on page by dragging or adjusting X/Y coordinates.'}
         </p>
 
         <div className="mt-4 space-y-3.5">

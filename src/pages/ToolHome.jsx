@@ -47,7 +47,7 @@ export default function ToolHome({tools,onSelect}) {
           </a>
           <a href="mailto:mikeoforka7@gmail.com" className="group flex min-w-0 items-start gap-4 rounded-2xl border border-slate-200 p-5 transition hover:border-sky-300 hover:bg-sky-50/40 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-sky-200">
             <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-sky-50 text-sky-600"><Mail size={21}/></span>
-            <span className="min-w-0"><span className="block text-xs font-semibold uppercase tracking-wide text-slate-500">Email</span><span className="mt-2 block break-all text-base font-semibold text-slate-900">mikeoforka7@gmail.com</span><span className="mt-2 block text-xs text-slate-500">Send an email<ArrowUpRight size={13} className="ml-1 inline"/></span></span>
+            <span className="min-w-0"><span className="block text-xs font-semibold uppercase tracking-wide text-slate-500">Email</span><span className="mt-2 block break-all text-base font-semibold text-slate-900">pixelpdf2@gmail.com</span><span className="mt-2 block text-xs text-slate-500">Send an email<ArrowUpRight size={13} className="ml-1 inline"/></span></span>
           </a>
         </div>
         <p className="rounded-2xl bg-slate-50 p-4 text-xs leading-relaxed text-slate-500">For a technical issue, include the tool name, your device and browser, and what happened. Keep passwords and confidential documents out of your message.</p>

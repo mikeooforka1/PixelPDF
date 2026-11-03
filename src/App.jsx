@@ -25,17 +25,19 @@ import DigitalSignaturePdf from './pages/DigitalSignaturePdf';
 import FreehandPad from './pages/FreehandPad';
 import ImageCompressor from './pages/ImageCompressor';
 import PdfToImage from './pages/PdfToImage';
+import PdfEditor from './pages/PdfEditor';
 import * as pdfjsLib from 'pdfjs-dist';
 
-// All document tools share the same, bundled worker when installed or offline.
-pdfjsLib.GlobalWorkerOptions.workerSrc = `${process.env.PUBLIC_URL}/ocr/pdf.worker.min.js`;
+// Use unpkg with the exact version string matching your installed package
+pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
 
 const tabs = [
   {id:'home',label:'All tools',icon:Home,desc:'Find the right tool for your document'},
-  {id:'text',label:'Text to PDF',icon:FileText,desc:'Type or paste text and save it as a readable PDF.',group:'create'},
+  {id:'pdfeditor',label:'Edit PDF Text',icon:Edit,desc:'Click anywhere on a PDF page to add and customize text.',group:'pdf'},
   {id:'image',label:'Image to PDF',icon:ImageIcon,desc:'Combine photos or pictures into one PDF document.',group:'create'},
   {id:'signature',label:'Sign Document',icon:FileSignature,desc:'Add a drawn or typed signature to a PDF.',group:'pdf'},
   {id:'freehand',label:'Freehand Pad',icon:Edit,desc:'Draw or write notes and download them as a PDF.',group:'other'},
+  {id:'text',label:'Text to PDF',icon:FileText,desc:'Type or paste text and save it as a readable PDF.',group:'create'},
   {id:'mergesplit',label:'Merge & Split',icon:Layers,desc:'Join PDFs together or extract selected pages.',group:'pdf'},
   {id:'split',label:'Split PDF',icon:Scissors,desc:'Keep a page range or save each page as its own PDF.',group:'pdf'},
   {id:'compresspdf',label:'Compress PDF',icon:Minimize2,desc:'Make a PDF smaller for easier storage and sharing.',group:'pdf'},
@@ -55,6 +57,7 @@ const tabs = [
 // Map URL paths to tab keys
 const pathToTab = {
   '/': 'home',
+  '/PdfEditor': 'pdfeditor',
   '/ProtectPdf': 'protect',
   '/SplitPdf': 'split', '/CompressPdf': 'compresspdf', '/OrganizePdf': 'organize',
   '/WordToPdf': 'wordtopdf', '/ExcelToPdf': 'exceltopdf', '/PowerPointToPdf': 'powerpointtopdf',
@@ -63,7 +66,6 @@ const pathToTab = {
   '/PdfToText': 'extract',
   '/TextToPdf': 'text',
   '/ImageToPdf': 'image',
-  '/PdfEditor': 'extract', // Old bookmarks now open PDF to Text.
   '/DigitalSignaturePdf': 'signature',
   '/FreehandPad': 'freehand',
   '/MergeSplitPdf': 'mergesplit',
@@ -73,7 +75,7 @@ const pathToTab = {
 
 // Map tab keys to clean URL paths
 const tabToPath = {
-  protect:'/ProtectPdf', home:'/', split:'/SplitPdf', compresspdf:'/CompressPdf', organize:'/OrganizePdf',
+  protect:'/ProtectPdf', home:'/', pdfeditor:'/PdfEditor', split:'/SplitPdf', compresspdf:'/CompressPdf', organize:'/OrganizePdf',
   wordtopdf:'/WordToPdf', exceltopdf:'/ExcelToPdf', powerpointtopdf:'/PowerPointToPdf',
   pdftoword:'/PdfToWord', pdftopowerpoint:'/PdfToPowerPoint',
   scan: '/ScanToDocument',
@@ -139,7 +141,6 @@ export function InstallAppPanel() {
       if (data.ready) {setProgress(100); setMessage('');}
       else if (data.message) setMessage(data.message);
       if (data.preparing && !data.ready) {preparingRef.current = true; resetSetupTimer();}
-      // Installation may prepare missing tools once; refresh never starts a download.
       if (autoPrepare && !data.ready && !data.preparing && navigator.onLine) prepareOffline();
     });
   }
@@ -202,7 +203,6 @@ export function InstallAppPanel() {
     const onVisibility = () => { if (document.visibilityState === 'visible') { detectInstallation(); checkOffline(navigator.serviceWorker?.controller); checkForUpdate(); } };
     const onStorage = event => { if (event.key === installMemoryKey()) { setInstalled(isAppWindow() || remembersInstallation()); if (event.newValue === '1') { promptRef.current = null; setCanPrompt(false); setDialog(null); } } };
     if (isAppWindow()) rememberInstalled();
-    // A fresh native prompt means installation is available again (for example after uninstall).
     if (window.pixelpdfInstallPrompt && !isAppWindow()) onInstallReady();
     detectInstallation();
     window.addEventListener('storage', onStorage);
@@ -260,7 +260,6 @@ export function InstallAppPanel() {
       navigator.serviceWorker?.removeEventListener('controllerchange', onController);
       navigator.serviceWorker?.removeEventListener('message', onSetupMessage);
     };
-    // Register once. Tools and menu state must not restart setup or install prompts.
   }, []);
   useEffect(() => {
     if (dialog && panel.current) {
@@ -275,7 +274,6 @@ export function InstallAppPanel() {
     const event = promptRef.current;
     if (!event) { setDialog('install'); return; }
     setPrompting(true);
-    // An install event is single-use. Only request it in direct response to this click.
     promptRef.current = null; window.pixelpdfInstallPrompt = null; setCanPrompt(false);
     try {
       await event.prompt(); const choice = await event.userChoice;
@@ -329,6 +327,7 @@ export function InstallAppPanel() {
 
 function ActiveTool({ activeTab, onSelect }) {
   switch (activeTab) {
+    case 'pdfeditor': return <PdfEditor />;
     case 'protect': return <ProtectPdf />;
     case 'home': return <ToolHome tools={tabs.filter(tool=>tool.id!=='home')} onSelect={onSelect}/>;
     case 'split': case 'compresspdf': case 'organize': case 'wordtopdf': case 'exceltopdf': case 'powerpointtopdf': case 'pdftopowerpoint': return <ConversionWorkspace key={activeTab} kind={activeTab}/>;
@@ -346,7 +345,6 @@ function ActiveTool({ activeTab, onSelect }) {
 }
 
 export default function App() {
-  // 1. Detect path from URL on first load
   const [activeTab, setActiveTab] = useState(() => {
     const currentPath = window.location.pathname;
     return pathToTab[currentPath] || 'home';
@@ -362,7 +360,6 @@ export default function App() {
   const primaryTabs = tabs.slice(0, 3);
   const overflowTabs = tabs.slice(3);
 
-  // 2. Keep browser URL in sync when tabs are switched
   const selectTab = (id) => {
     setActiveTab(id);
     setMobileMenuOpen(false);
@@ -372,7 +369,6 @@ export default function App() {
     }
   };
 
-  // 3. Handle browser back/forward buttons
   useEffect(() => {
     const handlePopState = () => {
       const tab = pathToTab[window.location.pathname];
@@ -398,7 +394,6 @@ export default function App() {
     };
   }, []);
 
-  // Close overflow dropdown on outside click
   useEffect(() => {
     const handleOutsideClick = (e) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
@@ -412,11 +407,9 @@ export default function App() {
 
   return (
     <div className="min-h-screen min-h-[100dvh] w-full bg-[radial-gradient(circle_at_top_left,_rgba(124,58,237,.08),_transparent_32%),radial-gradient(circle_at_top_right,_rgba(37,99,235,.08),_transparent_30%)] flex flex-col font-sans">
-      {/* Sticky Universal Header */}
       <header style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }} className="sticky top-0 z-40 border-b border-slate-200/80 bg-white/95 backdrop-blur-md">
         <div className="mx-auto max-w-7xl px-3 py-2.5 sm:px-6 lg:px-8">
           <div className="flex min-w-0 items-center justify-between gap-2">
-            {/* Brand Logo & Name */}
             <div
               className="flex items-center gap-1.5 sm:gap-2.5 shrink-0 cursor-pointer"
               role="button" tabIndex={0}
@@ -439,9 +432,7 @@ export default function App() {
               </div>
             </div>
 
-            {/* Desktop Navigation */}
             <nav aria-label="Desktop tools switcher" className="hidden lg:flex min-w-0 items-center gap-1 rounded-2xl bg-slate-100 p-1">
-              {/* Compact desktop navigation with the remaining tools in a menu. */}
               <div className="flex items-center gap-1">
                 {primaryTabs.map(({ id, label, icon: Icon }) => (
                   <button
@@ -460,7 +451,6 @@ export default function App() {
                   </button>
                 ))}
 
-                {/* More Tools Dropdown */}
                 <div className="relative" ref={dropdownRef}>
                   <button
                     type="button"
@@ -506,7 +496,6 @@ export default function App() {
               </div>
             </nav>
 
-            {/* Phone and tablet tool chooser. */}
             <div className="flex lg:hidden min-w-0 items-center gap-1.5 sm:gap-2">
               <button
                 type="button"
@@ -537,7 +526,6 @@ export default function App() {
 
         <InstallAppPanel />
 
-        {/* Mobile Dropdown Grid Sheet */}
         {mobileMenuOpen && (
           <nav id="mobile-tools" aria-label="Mobile tools switcher" className="max-h-[calc(100dvh-140px)] overflow-y-auto overscroll-contain border-t border-slate-100 bg-white/95 px-3 py-3 backdrop-blur-md lg:hidden animate-in fade-in slide-in-from-top-2">
             <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider px-1 mb-2">
@@ -568,7 +556,6 @@ export default function App() {
         )}
       </header>
 
-      {/* Main Workspace Area */}
       <main className="mx-auto max-w-7xl min-w-0 w-full px-2 sm:px-3 py-4 sm:px-6 sm:py-6 lg:px-8 flex-1">
         {activeTab !== 'home' && <section
           aria-label="Key features"
@@ -611,7 +598,6 @@ export default function App() {
           </div>
         </section>}
 
-        {/* Current Active Tool Component */}
         <ActiveTool activeTab={activeTab} onSelect={selectTab} />
       </main>
 

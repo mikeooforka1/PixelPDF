@@ -2,7 +2,7 @@
    Only public application assets are cached; never documents or API responses. */
 importScripts(new URL('pwa-libs/jszip.min.js', self.location.href).href);
 const BASE = new URL(self.registration.scope);
-const BUILD = '5d68bfe16488b1a1752659d55aed4cae33d5605b3eef56c18a9c5283e9999841';
+const BUILD = 'bbe5ac68479d4605d2c8731a79cc90a2569bbf50d0b00138c5ddc06265226d8b';
 const PREFIX = `pixelpdf-${BASE.pathname.replace(/[^a-z0-9]/gi, '_')}-`;
 const VERSION = BUILD.replace(/[^a-z0-9._-]/gi, '_');
 const SHELL = `${PREFIX}${VERSION}-shell`;

@@ -1,808 +1,187 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
-import {
-  Download,
-  FileUp,
-  LoaderCircle,
-  Plus,
-  Trash2,
-  Type,
-  UploadCloud,
-  FilePenLine,
-  ChevronLeft,
-  ChevronRight,
-  Check,
-  Edit3,
-  Layers,
-  ZoomIn,
-  ZoomOut
-} from 'lucide-react';
-import { PDFDocument, StandardFonts, rgb, degrees } from 'pdf-lib';
-import * as pdfjsLib from 'pdfjs-dist';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Download, UploadCloud, Plus, Trash2, ZoomIn, ZoomOut, Move, Type, FilePenLine, Undo2 } from 'lucide-react';
+import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
+import * as pdfjs from 'pdfjs-dist/legacy/build/pdf';
 
-// Use the dynamic version matching your installed package to prevent setup/worker errors
-pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
-
-const fileToBytes = (file) => file.arrayBuffer();
+// Use the locally hosted PDF.js 3.11.174 worker for offline compatibility.
+pdfjs.GlobalWorkerOptions.workerSrc = `${process.env.PUBLIC_URL || ''}/pdfjs/pdf.worker.min.js`;
+const uid = () => (globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`);
+const clamp = (n, min, max) => Math.max(min, Math.min(max, n));
+const hexRgb = hex => { const h = /^#[0-9a-f]{6}$/i.test(hex) ? hex.slice(1) : '111827'; return rgb(parseInt(h.slice(0,2),16)/255,parseInt(h.slice(2,4),16)/255,parseInt(h.slice(4,6),16)/255); };
+const defaultItem = { text: 'New text', x: 40, y: 40, size: 18, color: '#111827', opacity: 100 };
 
 export default function PdfEditor() {
   const [file, setFile] = useState(null);
-  const [customName, setCustomName] = useState('');
-  const [pdfBytes, setPdfBytes] = useState(null);
-  const [pdf, setPdf] = useState(null);
-  const [pages, setPages] = useState([]);
+  const [bytes, setBytes] = useState(null);
+  const [doc, setDoc] = useState(null);
   const [page, setPage] = useState(1);
-  const [scaleFactor, setScaleFactor] = useState(1);
-  const [zoomLevel, setZoomLevel] = useState(100); // Zoom percentage (50% to 300%)
-  const [viewportDims, setViewportDims] = useState({ width: 0, height: 0 });
-
-  // Extracted existing text from the PDF
-  const [extractedItems, setExtractedItems] = useState([]);
-  // Overlays / edits made to original text or added items
-  const [overlays, setOverlays] = useState([]);
-  const [selectedOverlayId, setSelectedOverlayId] = useState(null);
-
-  // Dragging state for free positioning
-  const [draggingId, setDraggingId] = useState(null);
-  const dragOffsetRef = useRef({ x: 0, y: 0 });
-
+  const [mode, setMode] = useState('add');
+  const [zoom, setZoom] = useState(100);
+  const [fitWidth, setFitWidth] = useState(700);
+  const [size, setSize] = useState({width: 612, height: 792});
+  const [items, setItems] = useState([]);
+  const [originals, setOriginals] = useState([]);
+  const [selected, setSelected] = useState(null);
   const [busy, setBusy] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const canvas = useRef(null);
+  const viewer = useRef(null);
+  const stage = useRef(null);
+  const interaction = useRef(null);
+  const renderJob = useRef(null);
+  const taskRef = useRef(null);
+  const selectedItem = items.find(i => i.id === selected);
+  const pageItems = items.filter(i => i.page === page);
+  const displayScale = (fitWidth / size.width) * zoom / 100;
 
-  const [form, setForm] = useState({
-    text: '',
-    x: 40,
-    y: 40,
-    size: 14,
-    color: '#000000',
-    opacity: 100,
-    rotate: 0,
-    isExistingEdit: false,
-    originalWidth: 0,
-    originalHeight: 0,
-  });
+  useEffect(() => {
+    if (!viewer.current) return;
+    const update = () => setFitWidth(Math.max(260, viewer.current.clientWidth - 36));
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(viewer.current);
+    return () => observer.disconnect();
+  }, [file]);
 
-  const canvasRef = useRef(null);
-  const wrapRef = useRef(null);
-
-  // Extract page content & render canvas honoring A4 proportions and zoom
-  const renderCurrentPage = useCallback(async () => {
-    if (!pdf || !canvasRef.current || !wrapRef.current) return;
-    setLoading(true);
-    try {
-      const pageDoc = await pdf.getPage(page);
-      const base = pageDoc.getViewport({ scale: 1 });
-      const containerWidth = wrapRef.current.clientWidth || 800;
-      
-      // Standard fit scale combined with user zoom level multiplier
-      const baseFitScale = Math.min((containerWidth - 24) / base.width, 1.2);
-      const currentScale = baseFitScale * (zoomLevel / 100);
-      setScaleFactor(currentScale);
-
-      const viewport = pageDoc.getViewport({ scale: currentScale });
-      setViewportDims({ width: viewport.width, height: viewport.height });
-
-      const canvas = canvasRef.current;
-      const ratio = window.devicePixelRatio || 1;
-      canvas.width = Math.floor(viewport.width * ratio);
-      canvas.height = Math.floor(viewport.height * ratio);
-      canvas.style.width = `${viewport.width}px`;
-      canvas.style.height = `${viewport.height}px`;
-
-      const ctx = canvas.getContext('2d');
-      ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
-      await pageDoc.render({ canvasContext: ctx, viewport }).promise;
-
-      // Extract existing text elements on this page
-      const textContent = await pageDoc.getTextContent();
-      const items = textContent.items
-        .filter((item) => item.str && item.str.trim().length > 0)
-        .map((item, idx) => {
-          const tx = pdfjsLib.Util.transform(viewport.transform, item.transform);
-          const fontHeight = Math.hypot(tx[2], tx[3]);
-          const x = tx[4];
-          const y = tx[5] - fontHeight;
-
-          return {
-            id: `orig-${page}-${idx}`,
-            page,
-            originalText: item.str,
-            text: item.str,
-            x: Math.round(x),
-            y: Math.max(0, Math.round(y)),
-            width: Math.round(item.width * currentScale),
-            height: Math.max(14, Math.round(fontHeight)),
-            size: Math.max(10, Math.round(fontHeight)),
-          };
+  useEffect(() => {
+    let disposed = false;
+    (async () => {
+      if (!doc || !canvas.current) return;
+      try {
+        const pdfPage = await doc.getPage(page);
+        if (disposed) return;
+        const base = pdfPage.getViewport({scale: 1});
+        setSize({width: base.width, height: base.height});
+        const factor = Math.max(0.1, fitWidth / base.width * zoom / 100);
+        const viewport = pdfPage.getViewport({scale: factor});
+        const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
+        const element = canvas.current;
+        element.width = Math.ceil(viewport.width * pixelRatio);
+        element.height = Math.ceil(viewport.height * pixelRatio);
+        element.style.width = `${viewport.width}px`;
+        element.style.height = `${viewport.height}px`;
+        const context = element.getContext('2d');
+        const job = pdfPage.render({canvasContext: context, viewport, transform: [pixelRatio,0,0,pixelRatio,0,0]});
+        renderJob.current = job;
+        await job.promise;
+        if (disposed) return;
+        const text = await pdfPage.getTextContent();
+        const textItems = text.items.filter(t => typeof t.str === 'string' && t.str.trim()).map((t, index) => {
+          const transformed = pdfjs.Util.transform(base.transform, t.transform);
+          const height = Math.max(4, Math.hypot(transformed[2], transformed[3]));
+          return {id:`${page}:${index}`, page, text:t.str, x:transformed[4], y:transformed[5]-height, width:Math.max(3,t.width), height, size:height};
         });
+        setOriginals(textItems);
+      } catch (e) { if (!disposed && e.name !== 'RenderingCancelledException') setError(e.message || 'Could not render this page.'); }
+    })();
+    return () => { disposed = true; renderJob.current?.cancel(); };
+  }, [doc, page, fitWidth, zoom]);
 
-      setExtractedItems(items);
-    } finally {
-      setLoading(false);
-    }
-  }, [pdf, page, zoomLevel]);
+  useEffect(() => () => { taskRef.current?.destroy(); }, []);
 
-  useEffect(() => {
-    renderCurrentPage();
-  }, [renderCurrentPage]);
-
-  useEffect(() => {
-    const handleResize = () => {
-      if (pdf) renderCurrentPage();
-    };
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, [pdf, renderCurrentPage]);
-
-  const load = async (f) => {
-    if (!f || f.type !== 'application/pdf') return;
-    setFile(f);
-    setCustomName(f.name.replace(/\.pdf$/i, ''));
-    setLoading(true);
-    setOverlays([]);
-    setSelectedOverlayId(null);
-
-    const bytes = await fileToBytes(f);
-    setPdfBytes(bytes);
-    const doc = await pdfjsLib.getDocument({ data: bytes }).promise;
-    setPdf(doc);
-    setPages(Array.from({ length: doc.numPages }, (_, i) => i + 1));
-    setPage(1);
-    setLoading(false);
-  };
-
-  const editOriginalText = (item) => {
-    const existing = overlays.find((o) => o.targetId === item.id);
-    if (existing) {
-      setSelectedOverlayId(existing.id);
-      setForm({
-        text: existing.text,
-        x: existing.x,
-        y: existing.y,
-        size: existing.size,
-        color: existing.color,
-        opacity: Math.round(existing.opacity * 100),
-        rotate: existing.rotate,
-        isExistingEdit: true,
-        originalWidth: existing.originalWidth,
-        originalHeight: existing.originalHeight,
-      });
-    } else {
-      const newOverlayId = crypto.randomUUID();
-      const newOverlay = {
-        id: newOverlayId,
-        targetId: item.id,
-        page,
-        text: item.text,
-        x: item.x,
-        y: item.y,
-        size: item.size,
-        color: '#000000',
-        opacity: 1,
-        rotate: 0,
-        scaleFactor,
-        isExistingEdit: true,
-        originalWidth: Math.max(item.width + 4, 20),
-        originalHeight: Math.max(item.height + 2, 14),
-      };
-      setOverlays((v) => [...v, newOverlay]);
-      setSelectedOverlayId(newOverlayId);
-      setForm({
-        text: item.text,
-        x: item.x,
-        y: item.y,
-        size: item.size,
-        color: '#000000',
-        opacity: 100,
-        rotate: 0,
-        isExistingEdit: true,
-        originalWidth: item.width + 4,
-        originalHeight: item.height + 2,
-      });
-    }
-  };
-
-  const handleCanvasClick = (e) => {
-    if (!canvasRef.current || draggingId) return;
-    const rect = canvasRef.current.getBoundingClientRect();
-    const clickX = Math.round(e.clientX - rect.left);
-    const clickY = Math.round(e.clientY - rect.top);
-
-    setSelectedOverlayId(null);
-    setForm({
-      text: 'New Note',
-      x: clickX,
-      y: clickY,
-      size: 14,
-      color: '#2563eb',
-      opacity: 100,
-      rotate: 0,
-      isExistingEdit: false,
-      originalWidth: 0,
-      originalHeight: 0,
-    });
-  };
-
-  // Drag and Drop handlers for free positioning anywhere
-  const handleMouseDown = (e, overlayId) => {
-    e.stopPropagation();
-    setSelectedOverlayId(overlayId);
-    const overlay = overlays.find((o) => o.id === overlayId);
-    if (!overlay) return;
-
-    setDraggingId(overlayId);
-    dragOffsetRef.current = {
-      x: e.clientX - overlay.x,
-      y: e.clientY - overlay.y,
-    };
-  };
-
-  const handleTouchStart = (e, overlayId) => {
-    e.stopPropagation();
-    setSelectedOverlayId(overlayId);
-    const overlay = overlays.find((o) => o.id === overlayId);
-    if (!overlay || !e.touches[0]) return;
-
-    setDraggingId(overlayId);
-    dragOffsetRef.current = {
-      x: e.touches[0].clientX - overlay.x,
-      y: e.touches[0].clientY - overlay.y,
-    };
-  };
-
-  const handleMouseMove = useCallback((e) => {
-    if (!draggingId) return;
-    const clientX = e.clientX || (e.touches && e.touches[0]?.clientX);
-    const clientY = e.clientY || (e.touches && e.touches[0]?.clientY);
-    if (clientX === undefined || clientY === undefined) return;
-
-    const newX = Math.round(clientX - dragOffsetRef.current.x);
-    const newY = Math.round(clientY - dragOffsetRef.current.y);
-
-    setOverlays((prev) =>
-      prev.map((o) => {
-        if (o.id === draggingId) {
-          return { ...o, x: newX, y: newY };
-        }
-        return o;
-      })
-    );
-
-    // Sync form if selected
-    setForm((prev) => ({ ...prev, x: newX, y: newY }));
-  }, [draggingId]);
-
-  const handleMouseUp = useCallback(() => {
-    setDraggingId(null);
-  }, []);
-
-  useEffect(() => {
-    if (draggingId) {
-      window.addEventListener('mousemove', handleMouseMove);
-      window.addEventListener('mouseup', handleMouseUp);
-      window.addEventListener('touchmove', handleMouseMove);
-      window.addEventListener('touchend', handleMouseUp);
-    }
-    return () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
-      window.removeEventListener('touchmove', handleMouseMove);
-      window.removeEventListener('touchend', handleMouseUp);
-    };
-  }, [draggingId, handleMouseMove, handleMouseUp]);
-
-  const saveFormOverlay = () => {
-    if (!form.text.trim()) return;
-
-    if (selectedOverlayId) {
-      setOverlays((prev) =>
-        prev.map((o) =>
-          o.id === selectedOverlayId
-            ? {
-                ...o,
-                text: form.text,
-                x: Number(form.x),
-                y: Number(form.y),
-                size: Number(form.size),
-                color: form.color,
-                opacity: Number(form.opacity) / 100,
-                rotate: Number(form.rotate),
-                scaleFactor,
-                isExistingEdit: form.isExistingEdit,
-                originalWidth: form.originalWidth,
-                originalHeight: form.originalHeight,
-              }
-            : o
-        )
-      );
-    } else {
-      const newId = crypto.randomUUID();
-      setOverlays((v) => [
-        ...v,
-        {
-          id: newId,
-          page,
-          text: form.text,
-          x: Number(form.x),
-          y: Number(form.y),
-          size: Number(form.size),
-          color: form.color,
-          opacity: Number(form.opacity) / 100,
-          rotate: Number(form.rotate),
-          scaleFactor,
-          isExistingEdit: false,
-          originalWidth: 0,
-          originalHeight: 0,
-        },
-      ]);
-      setSelectedOverlayId(newId);
-    }
-  };
-
-  const removeOverlay = (id) => {
-    setOverlays((v) => v.filter((o) => o.id !== id));
-    if (selectedOverlayId === id) setSelectedOverlayId(null);
-  };
-
-  const exportPdf = async () => {
-    if (!pdfBytes) return;
-    setBusy(true);
+  const load = async f => {
+    if (!f) return;
+    setError(''); setBusy(true);
     try {
-      const doc = await PDFDocument.load(pdfBytes);
-      const font = await doc.embedFont(StandardFonts.Helvetica);
-      const pageSizes = doc.getPages();
+      if (!/\.pdf$/i.test(f.name) && f.type !== 'application/pdf') throw Error('Select a PDF file.');
+      if (f.size > 80 * 1024 * 1024) throw Error('Choose a PDF smaller than 80 MB.');
+      const data = new Uint8Array(await f.arrayBuffer());
+      const task = pdfjs.getDocument({data: data.slice(), isEvalSupported: false, cMapUrl: `${process.env.PUBLIC_URL || ''}/pdf-assets/cmaps/`, cMapPacked: true});
+      const opened = await task.promise;
+      const old = taskRef.current;
+      taskRef.current = task;
+      setFile(f); setBytes(data); setDoc(opened); setPage(1); setItems([]); setSelected(null); setOriginals([]);
+      old?.destroy().catch(() => {});
+    } catch (e) { setError(e.message || 'Could not open this PDF.'); }
+    finally { setBusy(false); }
+  };
 
-      for (const o of overlays) {
-        const p = pageSizes[o.page - 1];
-        if (!p) continue;
+  const add = () => {
+    const item = {...defaultItem, id:uid(), page, kind:'add', x:Math.min(40,size.width-50), y:Math.min(40,size.height-30)};
+    setItems(v => [...v,item]); setSelected(item.id);
+  };
+  const replace = original => {
+    const previous = items.find(i => i.kind === 'replace' && i.source === original.id);
+    if (previous) { setSelected(previous.id); return; }
+    const item = {id:uid(),kind:'replace',source:original.id,page,text:original.text,x:original.x,y:original.y,size:original.size,color:'#111827',opacity:100,erase:{x:original.x,y:original.y,width:original.width,height:original.height}};
+    setItems(v => [...v,item]); setSelected(item.id);
+  };
+  const change = patch => setItems(v => v.map(i => i.id === selected ? {...i,...patch} : i));
+  const remove = () => {setItems(v => v.filter(i => i.id !== selected));setSelected(null);};
 
-        const { height } = p.getSize();
-        const factor = o.scaleFactor || 1;
-        const normalizedX = o.x / factor;
-        const normalizedY = o.y / factor;
-        const normalizedSize = o.size / factor;
+  const startPointer = (event, item, action) => {
+    event.stopPropagation(); event.preventDefault();
+    setSelected(item.id);
+    event.currentTarget.setPointerCapture(event.pointerId);
+    interaction.current = {id:item.id,action,x:event.clientX,y:event.clientY,startX:item.x,startY:item.y,startSize:item.size};
+  };
+  const movePointer = event => {
+    const active = interaction.current;
+    if (!active) return;
+    const factor = Math.max(0.01, displayScale);
+    const dx = (event.clientX - active.x) / factor;
+    const dy = (event.clientY - active.y) / factor;
+    setItems(v => v.map(i => i.id !== active.id ? i : active.action === 'resize'
+      ? {...i,size:clamp(active.startSize + dx / 2 + dy / 2, 6, 160)}
+      : {...i,x:clamp(active.startX + dx,0,size.width-8),y:clamp(active.startY + dy,0,size.height-8)}));
+  };
+  const stopPointer = () => { interaction.current = null; };
 
-        if (o.isExistingEdit && o.originalWidth && o.originalHeight) {
-          const normW = o.originalWidth / factor;
-          const normH = o.originalHeight / factor;
-          p.drawRectangle({
-            x: normalizedX - 1,
-            y: height - normalizedY - normH,
-            width: normW + 3,
-            height: normH + 2,
-            color: rgb(1, 1, 1),
-            opacity: 1,
-          });
+  const exportFile = async () => {
+    if (!bytes) return;
+    setBusy(true);setError('');
+    try {
+      const output = await PDFDocument.load(bytes);
+      const font = await output.embedFont(StandardFonts.Helvetica);
+      for (const item of items) {
+        const target = output.getPage(item.page-1);
+        if (!target) continue;
+        const {height} = target.getSize();
+        if (item.erase) {
+          target.drawRectangle({x:item.erase.x-1,y:height-item.erase.y-item.erase.height-2,width:item.erase.width+3,height:item.erase.height+4,color:rgb(1,1,1)});
         }
-
-        const hex = o.color.replace('#', '');
-        const c = rgb(
-          parseInt(hex.slice(0, 2), 16) / 255,
-          parseInt(hex.slice(2, 4), 16) / 255,
-          parseInt(hex.slice(4, 6), 16) / 255
-        );
-
-        p.drawText(o.text, {
-          x: normalizedX,
-          y: height - normalizedY - normalizedSize,
-          size: normalizedSize,
-          font,
-          color: c,
-          opacity: o.opacity,
-          rotate: degrees(o.rotate),
+        const cleanText = item.text.replace(/\r/g,'').replace(/[^\x0A\x20-\x7E\xA0-\xFF]/g,'?');
+        const lines = cleanText.split('\n');
+        lines.forEach((line,index) => {
+          if (!line) return;
+          target.drawText(line,{x:item.x,y:height-item.y-item.size-index*item.size*1.2,size:item.size,font,color:hexRgb(item.color),opacity:item.opacity/100});
         });
       }
-
-      const out = await doc.save();
-      const blob = new Blob([out], { type: 'application/pdf' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      const exportName = (customName.trim() || 'edited-document').replace(/\.pdf$/i, '');
-      a.download = `${exportName}.pdf`;
-      a.click();
-      URL.revokeObjectURL(url);
-    } finally {
-      setBusy(false);
-    }
+      const result = await output.save();
+      const url = URL.createObjectURL(new Blob([result],{type:'application/pdf'}));
+      const anchor = document.createElement('a');anchor.href=url;anchor.download=`${file.name.replace(/\.pdf$/i,'')}-edited.pdf`;anchor.click();
+      setTimeout(() => URL.revokeObjectURL(url),30000);
+    } catch (e) { setError(`Export failed: ${e.message}`); }
+    finally {setBusy(false);}
   };
-
-  const currentOverlays = overlays.filter((o) => o.page === page);
-  const currentExtracted = extractedItems.filter((i) => i.page === page);
-
-  return (
-    <section className="grid gap-6 lg:grid-cols-[1fr_360px] items-start w-full">
-      {/* PDF Viewport Container */}
-      <div className="panel overflow-hidden border border-slate-200/80 shadow-xs flex flex-col">
-        {/* Header / Document Name */}
-        <div className="border-b border-slate-100 p-4 sm:p-5 bg-slate-50/70">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex-1 min-w-0">
-              <h2 className="text-lg sm:text-xl font-bold tracking-tight text-slate-900">PDF Editor</h2>
-              {file ? (
-                <div className="mt-2 flex items-center gap-2 max-w-sm">
-                  <FilePenLine size={15} className="text-violet-600 shrink-0" />
-                  <input
-                    type="text"
-                    value={customName}
-                    onChange={(e) => setCustomName(e.target.value)}
-                    className="field py-1 px-2.5 text-xs sm:text-sm font-semibold text-slate-800"
-                    placeholder="Document name"
-                  />
-                  <span className="text-xs text-slate-400 font-medium">.pdf</span>
-                </div>
-              ) : (
-                <p className="text-xs sm:text-sm text-slate-500">Tap or click any text in the PDF to edit it directly.</p>
-              )}
-            </div>
-
-            {file && (
-              <div className="flex items-center gap-2">
-                {/* Zoom Controls */}
-                <div className="flex items-center bg-white rounded-lg border border-slate-200 shadow-2xs">
-                  <button
-                    type="button"
-                    onClick={() => setZoomLevel((z) => Math.max(50, z - 25))}
-                    className="p-1.5 text-slate-600 hover:text-violet-700 hover:bg-slate-50 rounded-l-lg"
-                    title="Zoom out"
-                  >
-                    <ZoomOut size={15} />
-                  </button>
-                  <span className="px-2 text-xs font-semibold text-slate-700">{zoomLevel}%</span>
-                  <button
-                    type="button"
-                    onClick={() => setZoomLevel((z) => Math.min(300, z + 25))}
-                    className="p-1.5 text-slate-600 hover:text-violet-700 hover:bg-slate-50 rounded-r-lg"
-                    title="Zoom in"
-                  >
-                    <ZoomIn size={15} />
-                  </button>
-                </div>
-
-                <button
-                  type="button"
-                  className="btn-secondary text-xs sm:text-sm py-1.5 px-3"
-                  onClick={() => {
-                    setFile(null);
-                    setPdf(null);
-                    setPdfBytes(null);
-                    setPages([]);
-                    setOverlays([]);
-                    setExtractedItems([]);
-                    setZoomLevel(100);
-                  }}
-                >
-                  <FileUp size={14} /> Change File
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {!file ? (
-          <label className="m-4 sm:m-8 block cursor-pointer rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50/60 p-8 sm:p-14 text-center hover:border-violet-400 hover:bg-violet-50/40 transition">
-            <input type="file" accept="application/pdf" className="hidden" onChange={(e) => load(e.target.files?.[0])} />
-            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-slate-900/5">
-              <UploadCloud className="text-violet-600" size={30} />
-            </div>
-            <p className="mt-4 font-bold text-slate-800">Upload a PDF to start editing</p>
-            <p className="mt-1 text-xs sm:text-sm text-slate-500">Edit existing words or drag new text anywhere on A4 pages.</p>
-          </label>
-        ) : (
-          <div className="bg-slate-100/90 p-2 sm:p-5 flex flex-col items-center select-none overflow-auto max-h-[75vh]">
-            <div className="mb-2 text-center text-xs text-slate-500 flex items-center justify-center gap-1.5 px-2">
-              <Edit3 size={13} className="text-violet-600 shrink-0" />
-              <span>Click text to edit, click empty space to add text, or drag added text anywhere</span>
-            </div>
-
-            {/* A4 Canvas + Interactive Overlays Layer */}
-            <div
-              ref={wrapRef}
-              onClick={handleCanvasClick}
-              className="relative overflow-hidden rounded-xl border border-slate-300 bg-white shadow-md cursor-crosshair"
-              style={{
-                width: viewportDims.width || 'auto',
-                height: viewportDims.height || 'auto',
-                minWidth: viewportDims.width || 'auto',
-                minHeight: viewportDims.height || 'auto',
-              }}
-            >
-              <canvas ref={canvasRef} className="block select-none pointer-events-none" />
-
-              {/* Extracted Existing Text Layer */}
-              {currentExtracted.map((item) => {
-                const isOverridden = currentOverlays.some((o) => o.targetId === item.id);
-                if (isOverridden) return null;
-
-                return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      editOriginalText(item);
-                    }}
-                    className="absolute bg-violet-500/0 hover:bg-violet-500/15 focus:bg-violet-500/25 active:bg-violet-500/30 rounded cursor-pointer transition border border-transparent hover:border-violet-300"
-                    style={{
-                      left: item.x - 1,
-                      top: item.y - 1,
-                      width: item.width + 2,
-                      height: item.height + 2,
-                    }}
-                    title={`Click to edit: "${item.text}"`}
-                  />
-                );
-              })}
-
-              {/* Active User Edits and Overlays (Draggable & Positionable anywhere) */}
-              {currentOverlays.map((o) => (
-                <div
-                  key={o.id}
-                  onMouseDown={(e) => handleMouseDown(e, o.id)}
-                  onTouchStart={(e) => handleTouchStart(e, o.id)}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setSelectedOverlayId(o.id);
-                    setForm({
-                      text: o.text,
-                      x: o.x,
-                      y: o.y,
-                      size: o.size,
-                      color: o.color,
-                      opacity: Math.round(o.opacity * 100),
-                      rotate: o.rotate,
-                      isExistingEdit: o.isExistingEdit,
-                      originalWidth: o.originalWidth,
-                      originalHeight: o.originalHeight,
-                    });
-                  }}
-                  className={`absolute cursor-move px-1.5 py-0.5 rounded font-sans transition-shadow leading-none ${
-                    selectedOverlayId === o.id
-                      ? 'ring-2 ring-violet-600 bg-white/95 shadow-md z-20'
-                      : o.isExistingEdit
-                      ? 'bg-white text-slate-900 shadow-2xs z-10'
-                      : 'bg-white/70 hover:bg-white shadow-2xs hover:ring-1 hover:ring-slate-400 z-10'
-                  }`}
-                  style={{
-                    left: o.x,
-                    top: o.y,
-                    fontSize: `${o.size}px`,
-                    color: o.color,
-                    opacity: o.opacity,
-                    transform: `rotate(${o.rotate}deg)`,
-                    transformOrigin: 'left top',
-                  }}
-                >
-                  {o.text}
-                </div>
-              ))}
-
-              {loading && (
-                <div className="absolute inset-0 grid place-items-center bg-white/80 backdrop-blur-xs">
-                  <LoaderCircle className="animate-spin text-violet-600" size={32} />
-                </div>
-              )}
-            </div>
-
-            {/* Mobile-Friendly Page Navigation */}
-            <div className="mt-4 flex items-center justify-between sm:justify-center gap-2 w-full max-w-sm">
-              <button
-                type="button"
-                className="btn-secondary flex-1 sm:flex-none px-3 py-1.5 text-xs justify-center"
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={page <= 1}
-              >
-                <ChevronLeft size={16} /> Prev
-              </button>
-              <span className="text-xs font-semibold text-slate-700 whitespace-nowrap px-2">
-                Page {page} of {pages.length} (A4)
-              </span>
-              <button
-                type="button"
-                className="btn-secondary flex-1 sm:flex-none px-3 py-1.5 text-xs justify-center"
-                onClick={() => setPage((p) => Math.min(pages.length, p + 1))}
-                disabled={page >= pages.length}
-              >
-                Next <ChevronRight size={16} />
-              </button>
-            </div>
-          </div>
-        )}
+  const control = 'w-full min-w-0 rounded-xl border border-slate-200 bg-white px-3 py-2 text-base text-slate-900 focus:outline-none focus:ring-2 focus:ring-violet-400';
+  return <section className="w-full min-w-0 space-y-4">
+    <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-xl font-bold">PDF Editor</h2><p className="text-sm text-slate-500">Local editing · Move and resize with mouse, touch or pen</p></div>{file&&<label className="btn-secondary cursor-pointer"><UploadCloud size={16}/>Change PDF<input className="hidden" type="file" accept=".pdf,application/pdf" onChange={e=>load(e.target.files?.[0])}/></label>}</div>
+    {error&&<div role="alert" className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</div>}
+    {!file ? <label className="block cursor-pointer rounded-3xl border-2 border-dashed border-violet-200 bg-white p-10 text-center"><UploadCloud className="mx-auto text-violet-600" size={42}/><span className="mt-3 block font-bold">Choose a PDF to edit</span><span className="block text-sm text-slate-500">Your document stays on this device</span><input className="hidden" type="file" accept=".pdf,application/pdf" onChange={e=>load(e.target.files?.[0])}/></label> : <>
+      <div className="flex flex-wrap items-center gap-2 rounded-2xl border bg-white p-3">
+        <button className={`rounded-xl px-3 py-2 text-sm font-semibold ${mode==='add'?'bg-violet-600 text-white':'bg-slate-100'}`} onClick={()=>{setMode('add');setSelected(null)}}><Plus size={16} className="inline mr-1"/>Add text</button>
+        <button className={`rounded-xl px-3 py-2 text-sm font-semibold ${mode==='edit'?'bg-violet-600 text-white':'bg-slate-100'}`} onClick={()=>{setMode('edit');setSelected(null)}}><FilePenLine size={16} className="inline mr-1"/>Edit PDF text</button>
+        <div className="flex items-center gap-2 ml-auto"><button aria-label="Zoom out" className="rounded-lg border p-2" onClick={()=>setZoom(z=>clamp(z-25,50,300))}><ZoomOut size={18}/></button><span className="text-sm tabular-nums">{zoom}%</span><button aria-label="Zoom in" className="rounded-lg border p-2" onClick={()=>setZoom(z=>clamp(z+25,50,300))}><ZoomIn size={18}/></button><button className="rounded-lg border px-3 py-2 text-sm" onClick={()=>setZoom(100)}>Fit</button></div>
       </div>
-
-      {/* Editor Controls Sidebar */}
-      <aside className="panel p-4 sm:p-6 border border-slate-200/80 shadow-xs">
-        <h3 className="flex items-center gap-2 text-base font-bold text-slate-900">
-          <Type size={18} className="text-violet-600" />
-          {form.isExistingEdit ? 'Edit PDF Text' : selectedOverlayId ? 'Edit Added Text' : 'Text Tools'}
-        </h3>
-        <p className="mt-1 text-xs text-slate-500">
-          {form.isExistingEdit
-            ? 'Updating this replaces the original text seamlessly with white-out redaction.'
-            : 'Type text, position anywhere on page by dragging or adjusting X/Y coordinates.'}
-        </p>
-
-        <div className="mt-4 space-y-3.5">
-          <label className="block text-xs font-bold uppercase tracking-wider text-slate-600">
-            Text Content
-            <input
-              className="field mt-1.5 w-full text-sm"
-              value={form.text}
-              onChange={(e) => setForm({ ...form, text: e.target.value })}
-              placeholder="Enter text..."
-            />
-          </label>
-
-          <div className="grid grid-cols-2 gap-2.5">
-            <label className="text-xs font-semibold text-slate-600">
-              Font Size (px)
-              <input
-                className="field mt-1 w-full text-sm"
-                type="number"
-                min="8"
-                max="80"
-                value={form.size}
-                onChange={(e) => setForm({ ...form, size: Number(e.target.value) })}
-              />
-            </label>
-            <label className="text-xs font-semibold text-slate-600">
-              Rotation (°)
-              <input
-                className="field mt-1 w-full text-sm"
-                type="number"
-                min="-180"
-                max="180"
-                value={form.rotate}
-                onChange={(e) => setForm({ ...form, rotate: Number(e.target.value) })}
-              />
-            </label>
-            <label className="text-xs font-semibold text-slate-600">
-              X Coordinate
-              <input
-                className="field mt-1 w-full text-sm"
-                type="number"
-                value={form.x}
-                onChange={(e) => setForm({ ...form, x: Number(e.target.value) })}
-              />
-            </label>
-            <label className="text-xs font-semibold text-slate-600">
-              Y Coordinate
-              <input
-                className="field mt-1 w-full text-sm"
-                type="number"
-                value={form.y}
-                onChange={(e) => setForm({ ...form, y: Number(e.target.value) })}
-              />
-            </label>
-          </div>
-
-          <label className="block text-xs font-semibold text-slate-600">
-            Color
-            <div className="mt-1 flex gap-2">
-              <input
-                type="color"
-                value={form.color}
-                onChange={(e) => setForm({ ...form, color: e.target.value })}
-                className="h-10 w-12 cursor-pointer rounded-lg border border-slate-200 p-1"
-              />
-              <input
-                className="field flex-1 text-sm font-mono"
-                value={form.color}
-                onChange={(e) => setForm({ ...form, color: e.target.value })}
-              />
-            </div>
-          </label>
-
-          <label className="block text-xs font-semibold text-slate-600">
-            <span className="flex justify-between">
-              <span>Opacity</span>
-              <span className="text-slate-400">{form.opacity}%</span>
-            </span>
-            <input
-              className="mt-1.5 w-full accent-violet-600"
-              type="range"
-              min="10"
-              max="100"
-              value={form.opacity}
-              onChange={(e) => setForm({ ...form, opacity: Number(e.target.value) })}
-            />
-          </label>
-
-          <div className="flex gap-2 pt-1">
-            <button
-              type="button"
-              className="btn-primary flex-1 justify-center text-sm py-2"
-              onClick={saveFormOverlay}
-              disabled={!file || !form.text.trim()}
-            >
-              {selectedOverlayId ? <Check size={16} /> : <Plus size={16} />}
-              {selectedOverlayId ? 'Apply Changes' : `Add to Page ${page}`}
-            </button>
-            {selectedOverlayId && (
-              <button
-                type="button"
-                className="btn-secondary px-3"
-                onClick={() => {
-                  setSelectedOverlayId(null);
-                  setForm({
-                    text: '',
-                    x: 40,
-                    y: 40,
-                    size: 14,
-                    color: '#000000',
-                    opacity: 100,
-                    rotate: 0,
-                    isExistingEdit: false,
-                    originalWidth: 0,
-                    originalHeight: 0,
-                  });
-                }}
-              >
-                Clear
-              </button>
-            )}
-          </div>
+      <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="min-w-0 rounded-2xl border bg-slate-100 p-2 sm:p-4"><div className="mb-3 flex items-center justify-center gap-3"><button className="rounded-lg border bg-white px-3 py-2 disabled:opacity-40" disabled={page<=1} onClick={()=>{setPage(p=>p-1);setSelected(null)}}>Previous</button><span className="text-sm font-semibold">{page} / {doc?.numPages}</span><button className="rounded-lg border bg-white px-3 py-2 disabled:opacity-40" disabled={page>=doc?.numPages} onClick={()=>{setPage(p=>p+1);setSelected(null)}}>Next</button></div>
+          <div ref={viewer} className="max-h-[78vh] min-h-[380px] w-full overflow-auto rounded-xl bg-slate-200 p-2"><div ref={stage} className="relative mx-auto bg-white shadow-xl" style={{width:size.width*displayScale,height:size.height*displayScale}} onPointerMove={movePointer} onPointerUp={stopPointer} onPointerCancel={stopPointer}>
+            <canvas ref={canvas} className="block" />
+            {mode==='edit'&&originals.map(o=><button key={o.id} title={`Edit: ${o.text}`} onClick={()=>replace(o)} className="absolute border border-transparent bg-violet-300/10 hover:border-violet-500 focus:border-violet-500" style={{left:o.x*displayScale,top:o.y*displayScale,width:Math.max(8,o.width*displayScale),height:Math.max(8,o.height*displayScale)}} aria-label={`Edit text ${o.text.slice(0,60)}`}/>)}
+            {pageItems.map(i=><div key={i.id} className={`absolute cursor-move whitespace-pre select-none ${selected===i.id?'outline outline-2 outline-violet-500':'hover:outline hover:outline-1 hover:outline-violet-300'}`} style={{left:i.x*displayScale,top:i.y*displayScale,fontSize:i.size*displayScale,lineHeight:1.2,color:i.color,opacity:i.opacity/100,touchAction:'none',maxWidth:`${(size.width-i.x)*displayScale}px`}} onPointerDown={e=>startPointer(e,i,'move')}>
+              {i.kind==='replace'&&<span className="absolute inset-0 -z-10 bg-white"/>}{i.text||'Text'}
+              {selected===i.id&&<span role="button" aria-label="Resize text" title="Drag to resize" onPointerDown={e=>startPointer(e,i,'resize')} className="absolute -bottom-3 -right-3 flex h-6 w-6 items-center justify-center rounded-full bg-violet-600 text-white shadow" style={{touchAction:'none'}}><Move size={13}/></span>}
+            </div>)}
+          </div></div>
+          <p className="mt-2 text-center text-xs text-slate-500">Scroll to inspect the full page. Zoom up to 300%. Text edits are approximations, not changes to embedded font streams.</p>
         </div>
-
-        {overlays.length > 0 && (
-          <div className="mt-5 border-t border-slate-100 pt-4">
-            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
-              <Layers size={13} /> Active Edits ({overlays.length})
-            </h4>
-            <div className="mt-2.5 max-h-36 space-y-1.5 overflow-y-auto pr-1">
-              {overlays.map((o) => (
-                <div
-                  key={o.id}
-                  onClick={() => {
-                    setSelectedOverlayId(o.id);
-                    setForm({
-                      text: o.text,
-                      x: o.x,
-                      y: o.y,
-                      size: o.size,
-                      color: o.color,
-                      opacity: Math.round(o.opacity * 100),
-                      rotate: o.rotate,
-                      isExistingEdit: o.isExistingEdit,
-                      originalWidth: o.originalWidth,
-                      originalHeight: o.originalHeight,
-                    });
-                  }}
-                  className={`flex cursor-pointer items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-xs transition ${
-                    selectedOverlayId === o.id
-                      ? 'bg-violet-100 text-violet-900 font-semibold ring-1 ring-violet-300'
-                      : 'bg-slate-50 hover:bg-slate-100 text-slate-700'
-                  }`}
-                >
-                  <span className="truncate">
-                    p.{o.page}: {o.text} {o.isExistingEdit && '(Edited)'}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      removeOverlay(o.id);
-                    }}
-                    className="shrink-0 text-slate-400 hover:text-red-600 p-1"
-                    aria-label="Remove item"
-                  >
-                    <Trash2 size={13} />
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        <button
-          type="button"
-          className="btn-primary mt-5 w-full justify-center py-2.5 text-sm"
-          onClick={exportPdf}
-          disabled={!file || busy}
-        >
-          <Download size={16} />
-          {busy ? 'Exporting PDF…' : 'Download Edited PDF'}
-        </button>
-      </aside>
-    </section>
-  );
+        <aside className="min-w-0 rounded-2xl border bg-white p-4 sm:p-5"><h3 className="font-bold">{mode==='add'?'Add text overlay':'Replace visible PDF text'}</h3><p className="mt-1 text-xs text-slate-500">{mode==='add'?'Add a new text box, then drag and resize it.':'Select detected text on the page. Replacement covers its original area with white and draws new text; complex backgrounds may not match.'}</p>
+          {mode==='add'&&<button className="btn-primary mt-4 w-full" onClick={add}><Plus size={16}/>Add text box</button>}
+          {selectedItem?<div className="mt-5 space-y-3"><label className="block text-sm font-semibold">Text<textarea className={`${control} mt-1`} rows={3} value={selectedItem.text} onChange={e=>change({text:e.target.value})}/></label><div className="grid grid-cols-2 gap-2"><label className="text-xs font-semibold">X (PDF units)<input type="number" className={`${control} mt-1`} value={Math.round(selectedItem.x)} onChange={e=>change({x:clamp(Number(e.target.value),0,size.width)})}/></label><label className="text-xs font-semibold">Y (PDF units)<input type="number" className={`${control} mt-1`} value={Math.round(selectedItem.y)} onChange={e=>change({y:clamp(Number(e.target.value),0,size.height)})}/></label></div><label className="block text-sm font-semibold">Text size: {Math.round(selectedItem.size)}<input type="range" min="6" max="160" className="mt-2 w-full" value={selectedItem.size} onChange={e=>change({size:Number(e.target.value)})}/></label><label className="flex items-center gap-3 text-sm font-semibold">Color<input type="color" value={selectedItem.color} onChange={e=>change({color:e.target.value})}/></label><label className="block text-sm font-semibold">Opacity: {selectedItem.opacity}%<input className="mt-2 w-full" type="range" min="10" max="100" value={selectedItem.opacity} onChange={e=>change({opacity:Number(e.target.value)})}/></label><button className="flex items-center gap-2 rounded-xl border border-red-200 px-4 py-2 text-red-700" onClick={remove}><Trash2 size={16}/>Remove selection</button></div>:<p className="mt-5 rounded-xl bg-slate-50 p-4 text-sm text-slate-500">{mode==='add'?'Add a box to start editing.':'Tap highlighted text to replace it. Image-only scans require OCR first.'}</p>}
+          <div className="mt-5 border-t pt-4"><p className="text-xs text-slate-500">{items.length} change(s) across {doc?.numPages} page(s)</p><button className="btn-primary mt-3 w-full" disabled={busy} onClick={exportFile}><Download size={16}/>{busy?'Processing…':'Download edited PDF'}</button><button className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border p-2 text-sm" disabled={!items.length} onClick={()=>{setItems([]);setSelected(null)}}><Undo2 size={15}/>Clear all changes</button></div>
+        </aside>
+      </div>
+    </>}
+  </section>;
 }

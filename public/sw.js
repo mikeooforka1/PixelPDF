@@ -191,7 +191,7 @@ self.addEventListener('fetch',event=>{
   // A controlled window keeps its coherent release until an explicit update.
   if(request.mode==='navigate'){event.respondWith((async()=>await(await caches.open(SHELL)).match(local('index.html'))||fetch(request))());return;}
   const path=url.pathname.slice(BASE.pathname.length);
-  if(!/^(static\/|icons\/|ocr\/|pdf-assets\/|pwa-libs\/)/.test(path)&&!['logo.png','favicon.ico','manifest.json','pwa-assets.json'].includes(path))return;
+  if(!/^(static\/|icons\/|ocr\/|pdf-assets\/|pwa-libs\/|protect\/)/.test(path)&&!['logo.png','favicon.ico','manifest.json','pwa-assets.json','pdf.worker.min.mjs'].includes(path))return;
   event.respondWith((async()=>{
     const hit=await cached(url.href);if(hit)return hit;
     const response=await fetch(request);

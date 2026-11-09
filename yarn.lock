@@ -9939,6 +9939,9 @@ __metadata:
     tesseract.js: "npm:6.0.1"
     typescript: "npm:4.9.5"
     web-vitals: "npm:^4.2.4"
+  dependenciesMeta:
+    canvas:
+      built: false
   languageName: unknown
   linkType: soft
 

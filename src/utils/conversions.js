@@ -1,7 +1,8 @@
 import JSZip from 'jszip';
 import {jsPDF} from 'jspdf';
 import {PDFDocument, degrees} from 'pdf-lib';
-import * as pdfjs from 'pdfjs-dist';
+import * as pdfjs from 'pdfjs-dist/legacy/build/pdf';
+pdfjs.GlobalWorkerOptions.workerSrc = `${process.env.PUBLIC_URL || ''}/pdfjs/pdf.worker.min.js`;
 import {safeName} from './documentExport';
 const MAX_FILE = 50 * 1048576;
 const MAX_PAGES = 200;

@@ -2,7 +2,7 @@
    Only public application assets are cached; never documents or API responses. */
 importScripts(new URL('pwa-libs/jszip.min.js', self.location.href).href);
 const BASE = new URL(self.registration.scope);
-const BUILD = 'bbe5ac68479d4605d2c8731a79cc90a2569bbf50d0b00138c5ddc06265226d8b';
+const BUILD = '880baf000aac1435f336d0db219ca4e43c952eed359a6802a5cd2ca920153f40';
 const PREFIX = `pixelpdf-${BASE.pathname.replace(/[^a-z0-9]/gi, '_')}-`;
 const VERSION = BUILD.replace(/[^a-z0-9._-]/gi, '_');
 const SHELL = `${PREFIX}${VERSION}-shell`;
@@ -191,7 +191,7 @@ self.addEventListener('fetch',event=>{
   // A controlled window keeps its coherent release until an explicit update.
   if(request.mode==='navigate'){event.respondWith((async()=>await(await caches.open(SHELL)).match(local('index.html'))||fetch(request))());return;}
   const path=url.pathname.slice(BASE.pathname.length);
-  if(!/^(static\/|icons\/|ocr\/|pdf-assets\/|pwa-libs\/|protect\/)/.test(path)&&!['logo.png','favicon.ico','manifest.json','pwa-assets.json','pdf.worker.min.mjs'].includes(path))return;
+  if(!/^(static\/|icons\/|ocr\/|pdfjs\/|pdf-assets\/|pwa-libs\/|protect\/)/.test(path)&&!['logo.png','favicon.ico','manifest.json','pwa-assets.json','pdfjs/pdf.worker.min.js'].includes(path))return;
   event.respondWith((async()=>{
     const hit=await cached(url.href);if(hit)return hit;
     const response=await fetch(request);

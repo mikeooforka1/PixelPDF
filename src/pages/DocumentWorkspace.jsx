@@ -95,7 +95,7 @@ export default function DocumentWorkspace({ kind = 'scan' }) {
           if (file.size > 50 * 1024 * 1024) throw new Error(`${file.name}: use a file under 50 MB.`);
           const extension = file.name.split('.').pop().toLowerCase();
           if (extension === 'pdf' || file.type === 'application/pdf') {
-            const pdfjs = await import('pdfjs-dist'); check(); pdfjs.GlobalWorkerOptions.workerSrc = `${process.env.PUBLIC_URL}/ocr/pdf.worker.min.js`;
+            const pdfjs = await import('pdfjs-dist/legacy/build/pdf'); check(); pdfjs.GlobalWorkerOptions.workerSrc = `${process.env.PUBLIC_URL || ''}/pdfjs/pdf.worker.min.js`;
             const task = pdfjs.getDocument({ data: await file.arrayBuffer(), cMapUrl: `${process.env.PUBLIC_URL}/pdf-assets/cmaps/`, cMapPacked: true, standardFontDataUrl: `${process.env.PUBLIC_URL}/pdf-assets/standard_fonts/` });
             const onAbort = () => { task.destroy().catch(() => {}); }; abort.signal.addEventListener('abort', onAbort, { once: true });
             let doc;

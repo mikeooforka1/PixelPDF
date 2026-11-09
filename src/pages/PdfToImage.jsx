@@ -15,7 +15,7 @@ import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf';
 import JSZip from 'jszip';
 
 // Exact matching v3.11.174 worker URL with legacy fallback
-pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js`;
+pdfjsLib.GlobalWorkerOptions.workerSrc = `${process.env.PUBLIC_URL || ''}/pdfjs/pdf.worker.min.js`;
 
 export default function PdfToImage() {
   const [file, setFile] = useState(null);
@@ -163,7 +163,7 @@ export default function PdfToImage() {
       const bytes = await uploadedFile.arrayBuffer();
       const loadingTask = pdfjsLib.getDocument({
         data: new Uint8Array(bytes),
-        cMapUrl: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/cmaps/',
+        cMapUrl: `${process.env.PUBLIC_URL || ''}/pdf-assets/cmaps/`,
         cMapPacked: true,
       });
 

@@ -10,7 +10,8 @@
     "ocr/pdf.worker.min.js",
     "pwa-libs/jszip.min.js",
     "pwa-libs/pptxgen.bundle.js",
-    "pwa-libs/LICENSE-pptxgenjs.txt"
+    "pwa-libs/LICENSE-pptxgenjs.txt",
+    "pdfjs/pdf.worker.min.js"
   ],
   "offline": [
     "ocr/worker.min.js",
@@ -21,7 +22,6 @@
     "ocr/spa.traineddata.gz",
     "ocr/por.traineddata.gz",
     "ocr/deu.traineddata.gz",
-    "pdf.worker.min.mjs",
     "protect/protect-worker.js",
     "protect/qpdf.js",
     "protect/qpdf.wasm"
@@ -213,7 +213,6 @@
     "pdf-assets/standard_fonts/LiberationSans-Regular.ttf"
   ],
   "pdfArchive": "pwa-pdf-resources.zip",
-  "toolsRevision": "1c8993a252ecb78c8b5b186681fb83893dfd9d10981579494f5bfd77850e95dc",
   "schemaVersion": 2,
   "hashes": {
     "favicon.ico": "abbc25d1d2b3726c8498be52fe27b40c73769054140ccc7707b6e7a440aab4ee",
@@ -227,6 +226,7 @@
     "pwa-libs/jszip.min.js": "7f839b2d4688b845c105ebf5d2f9803075f91ea0fe72bdaac176c3a04dd3d2c1",
     "pwa-libs/pptxgen.bundle.js": "4fb9eac5cfefb213e2d8743c2b7151025f31bfb3f834c73c12062916daa0f3f8",
     "pwa-libs/LICENSE-pptxgenjs.txt": "7a2bfe96150786ed1908b8e63f98ebab88875c1e79e28faff6649e0f11f77e52",
+    "pdfjs/pdf.worker.min.js": "feabdf309770ed24bba31a5467836cdc8cf639c705af27d52b585b041bb8527b",
     "ocr/worker.min.js": "38645599043239c0eb6db08a6504a92dcdc292200535f3e9339cd77c4443b842",
     "ocr/tesseract-core-lstm.wasm.js": "775a35df6f2ae100e02609443e6bd5cafcd07983dd6175454ca4a432a7730687",
     "ocr/tesseract-core-simd-lstm.wasm.js": "9d7c43fb206dc9f48475228b46bf35f888fa9e6259da2e67d5a75c77049f2dc7",
@@ -235,7 +235,6 @@
     "ocr/spa.traineddata.gz": "6cd52c545bceeacb2e43fad64fc0703a711c482ba20d1ca4b6915c09de9973e6",
     "ocr/por.traineddata.gz": "3f5feea9dfc39106c92348089097a39bec66e9d6d09ca49befebb0bb60947374",
     "ocr/deu.traineddata.gz": "f5618a8b8d07f6c7a633ce243bf075bb90f4145bb15c9264734c7cc63aa33205",
-    "pdf.worker.min.mjs": "597dbe60b20ce4835f2fed0ed312b2536c78735f05bf3762edf7482d001f8c35",
     "protect/protect-worker.js": "7055e98962fe8bdfbc6553a98c9f3602d82ca5bd2c4f78de12b51f9361f1e194",
     "protect/qpdf.js": "c0e8fe62e0c3385dd8cb5d6b613f74d87a4138a3a3343e2add45a067a14d0884",
     "protect/qpdf.wasm": "abd933f4ccace4f732999381b21aec8b7e3726f18a5b167fafd57f88dd440876",
@@ -437,6 +436,7 @@
     "pwa-libs/jszip.min.js": 97781,
     "pwa-libs/pptxgen.bundle.js": 460889,
     "pwa-libs/LICENSE-pptxgenjs.txt": 1081,
+    "pdfjs/pdf.worker.min.js": 1087212,
     "ocr/worker.min.js": 111162,
     "ocr/tesseract-core-lstm.wasm.js": 3954181,
     "ocr/tesseract-core-simd-lstm.wasm.js": 3954569,
@@ -445,7 +445,6 @@
     "ocr/spa.traineddata.gz": 8362819,
     "ocr/por.traineddata.gz": 6755162,
     "ocr/deu.traineddata.gz": 7101284,
-    "pdf.worker.min.mjs": 1264369,
     "protect/protect-worker.js": 972,
     "protect/qpdf.js": 43376,
     "protect/qpdf.wasm": 1334286,
@@ -634,5 +633,6 @@
     "pdf-assets/standard_fonts/LiberationSans-Italic.ttf": 162036,
     "pdf-assets/standard_fonts/LiberationSans-Regular.ttf": 139512,
     "pwa-pdf-resources.zip": 1542054
-  }
+  },
+  "toolsRevision": "104e87e2a748c096000e6a98e4a2a2c41ff8640a592941e41fb8f5287f1ad7da"
 }

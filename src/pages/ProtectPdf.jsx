@@ -1,7 +1,10 @@
 import React, {useEffect, useRef, useState} from 'react';
 import {Lock, Download, ShieldCheck} from 'lucide-react';
-import * as pdfjs from 'pdfjs-dist';
+import * as pdfjs from 'pdfjs-dist/legacy/build/pdf';
 import {protectPdf} from '../utils/protectPdf';
+
+// PDF.js 3.11.174: use the matching worker hosted locally for offline support.
+pdfjs.GlobalWorkerOptions.workerSrc = `${process.env.PUBLIC_URL || ''}/pdfjs/pdf.worker.min.js`;
 
 export default function ProtectPdf() {
   const [file,setFile]=useState(null), [password,setPassword]=useState(''), [confirm,setConfirm]=useState('');

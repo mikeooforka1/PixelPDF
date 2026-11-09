@@ -26,10 +26,6 @@ import FreehandPad from './pages/FreehandPad';
 import ImageCompressor from './pages/ImageCompressor';
 import PdfToImage from './pages/PdfToImage';
 import PdfEditor from './pages/PdfEditor';
-import * as pdfjsLib from 'pdfjs-dist';
-
-// Use unpkg with the exact version string matching your installed package
-pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
 
 const tabs = [
   {id:'home',label:'All tools',icon:Home,desc:'Find the right tool for your document'},

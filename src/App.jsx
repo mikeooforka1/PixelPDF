@@ -26,6 +26,7 @@ import FreehandPad from './pages/FreehandPad';
 import ImageCompressor from './pages/ImageCompressor';
 import PdfToImage from './pages/PdfToImage';
 import PdfEditor from './pages/PdfEditor';
+import ScanToPdf from './pages/ScanToPdf';
 
 const tabs = [
   {id:'home',label:'All tools',icon:Home,desc:'Find the right tool for your document'},
@@ -41,6 +42,8 @@ const tabs = [
   {id:'organize',label:'Organize PDF',icon:LayoutGrid,desc:'Reorder, rotate or remove pages from a PDF.',group:'pdf'},
   {id:'compressor',label:'Image Compressor',icon:Sliders,desc:'Reduce picture size and resize images.',group:'other'},
   {id:'pdftoimage',label:'PDF to Image',icon:FileArchive,desc:'Save a PDF page as a picture you can use elsewhere.',group:'other'},
+  {id:'scantopdf',label:'Scan to PDF',icon:ScanText,desc:'Combine photographed pages into a PDF, including pages with no text.',group:'scan'},
+  {id:'pdftoexcel',label:'PDF to Excel',icon:FileSpreadsheet,desc:'Extract selectable PDF text and simple tables into Excel worksheets.',group:'scan'},
   {id:'scan',label:'Scan to Document',icon:ScanText,desc:'Read text from photos or handwriting, then review and export it.',group:'scan'},
   {id:'extract',label:'PDF to Text',icon:FileText,desc:'Read a PDF’s text and copy or download the words.',group:'scan'},
   {id:'wordtopdf',label:'Word to PDF',icon:FileOutput,desc:'Turn a .docx Word document into a shareable PDF.',group:'create'},
@@ -58,7 +61,7 @@ const pathToTab = {
   '/SplitPdf': 'split', '/CompressPdf': 'compresspdf', '/OrganizePdf': 'organize',
   '/WordToPdf': 'wordtopdf', '/ExcelToPdf': 'exceltopdf', '/PowerPointToPdf': 'powerpointtopdf',
   '/PdfToWord': 'pdftoword', '/PdfToPowerPoint': 'pdftopowerpoint',
-  '/ScanToDocument': 'scan',
+  '/ScanToDocument': 'scan', '/ScanToPdf':'scantopdf', '/PdfToExcel':'pdftoexcel',
   '/PdfToText': 'extract',
   '/TextToPdf': 'text',
   '/ImageToPdf': 'image',
@@ -74,7 +77,7 @@ const tabToPath = {
   protect:'/ProtectPdf', home:'/', pdfeditor:'/PdfEditor', split:'/SplitPdf', compresspdf:'/CompressPdf', organize:'/OrganizePdf',
   wordtopdf:'/WordToPdf', exceltopdf:'/ExcelToPdf', powerpointtopdf:'/PowerPointToPdf',
   pdftoword:'/PdfToWord', pdftopowerpoint:'/PdfToPowerPoint',
-  scan: '/ScanToDocument',
+  scan: '/ScanToDocument', scantopdf:'/ScanToPdf', pdftoexcel:'/PdfToExcel',
   extract: '/PdfToText',
   text: '/TextToPdf',
   image: '/ImageToPdf',
@@ -326,8 +329,9 @@ function ActiveTool({ activeTab, onSelect }) {
     case 'pdfeditor': return <PdfEditor />;
     case 'protect': return <ProtectPdf />;
     case 'home': return <ToolHome tools={tabs.filter(tool=>tool.id!=='home')} onSelect={onSelect}/>;
-    case 'split': case 'compresspdf': case 'organize': case 'wordtopdf': case 'exceltopdf': case 'powerpointtopdf': case 'pdftopowerpoint': return <ConversionWorkspace key={activeTab} kind={activeTab}/>;
+    case 'pdftoexcel': case 'split': case 'compresspdf': case 'organize': case 'wordtopdf': case 'exceltopdf': case 'powerpointtopdf': case 'pdftopowerpoint': return <ConversionWorkspace key={activeTab} kind={activeTab}/>;
     case 'pdftoword': return <DocumentWorkspace key="word" kind="word"/>;
+    case 'scantopdf': return <ScanToPdf />;
     case 'scan': return <DocumentWorkspace key="scan" />;
     case 'extract': return <DocumentWorkspace key="extract" kind="extract" />;
     case 'image': return <ImageToPdf />;

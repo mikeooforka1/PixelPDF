@@ -19,17 +19,12 @@
     "web-vitals": "^4.2.4"
   },
   "scripts": {
-    "start": "node scripts/sync-pdf-worker.cjs && react-scripts start",
-    "build": "node scripts/sync-pdf-worker.cjs && node scripts/prepare-pwa.cjs && react-scripts build && node scripts/finalize-pwa.cjs",
+    "start": "react-scripts start",
+    "build": "node scripts/prepare-pwa.cjs && react-scripts build && node scripts/finalize-pwa.cjs",
     "test": "react-scripts test",
     "eject": "react-scripts eject",
     "test:ci": "react-scripts test --watchAll=false --runInBand",
-    "test:offline": "node --test scripts/test-offline.cjs scripts/test-asset-integrity.cjs"
-  },
-  "dependenciesMeta": {
-    "canvas": {
-      "built": false
-    }
+    "test:offline": "node --test scripts/test-offline.cjs"
   },
   "browserslist": {
     "production": [

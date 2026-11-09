@@ -1,7 +1,9 @@
 import React,{useEffect,useRef,useState} from 'react';
 import {ArrowUp,ArrowDown,RotateCw,Trash2,FileCheck2} from 'lucide-react';
+import {pdfToExcel} from '../utils/pdfToExcel';
 import {checkFile,splitPdf,compressPdf,pdfToPptx,wordToPdf,excelToPdf,powerpointToPdf,organizePdf,pdfPreviews,downloadBlob} from '../utils/conversions';
 const tools={
+  pdftoexcel:{title:'PDF to Excel',extension:'pdf',description:'Extract text and simple tables from each PDF page into editable Excel worksheets.',note:'Each PDF page becomes a worksheet. Column boundaries are estimated from text spacing. This is not a full table reconstruction engine: scanned pages, complex tables, merged cells, and formula recovery require review. Image-only PDFs are reported rather than producing an empty spreadsheet.'},
   split:{title:'Split PDF',extension:'pdf',description:'Keep selected pages in a new PDF, or download every page as a separate PDF inside a ZIP.'},
   compresspdf:{title:'Compress PDF',extension:'pdf',description:'Reduce a PDF’s file size. Choose whether to preserve its text or make smaller image-based pages.'},
   wordtopdf:{title:'Word to PDF',extension:'docx',description:'Turn a modern Word document into a PDF you can share and print.',note:'Browser conversion supports body text, basic headings, tables and common embedded images. Fonts, headers, footers, columns and advanced layouts may differ. Review the PDF before sharing. Supports Latin-script text; use Office’s PDF export for other scripts. PDF pages are rendered as images, so their text is not searchable.'},
@@ -29,6 +31,7 @@ export default function ConversionWorkspace({kind}) {
     try{
       const args=[file,controller.signal,updateStatus];let converted;
       if(kind==='split')converted=await splitPdf(file,range,separate,controller.signal,updateStatus);
+      else if(kind==='pdftoexcel')converted=await pdfToExcel(...args);
       else if(kind==='compresspdf')converted=await compressPdf(file,compression,controller.signal,updateStatus);
       else if(kind==='organize')converted=await organizePdf(file,pages,controller.signal,updateStatus);
       else converted=await ({wordtopdf:wordToPdf,exceltopdf:excelToPdf,powerpointtopdf:powerpointToPdf,pdftopowerpoint:pdfToPptx}[kind])(...args);

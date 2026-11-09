@@ -264,16 +264,16 @@ export default function DocumentWorkspace({ kind = 'scan' }) {
         } catch (error) { if (error.name === 'AbortError') throw error; passFailure = error.message || String(error); releaseWorker(localWorker); if (worker.current === localWorker) worker.current = null; localWorker = null; }
         image.width = 1; image.height = 1;
         if (!best?.text) {
-          results.push(`[Page ${pageNumber}: no readable text — review the source]`);
+          results.push('');
           review.push({ page: pageNumber, confidence: 0, uncertain: [], failure: passFailure || 'No readable text. Retake a clearer, upright photo.' });
         } else { results.push(best.text); review.push({ page: pageNumber, confidence: Math.round(best.confidence), uncertain: best.uncertain, alternatives: readings.filter(reading => reading.text !== best.text), engine: 'Browser OCR', warning: [serverWarning, passFailure ? 'One scan pass failed; the recovered text was kept.' : ''].filter(Boolean).join(' ') }); }
       }
       check();
-      if (review.every(page => page.failure)) { setScanReview(review); throw new Error('No readable text found. Your previous text is preserved. Try a clearer image; cursive handwriting may not be recognized.'); }
-      setText(results.join('\n\n')); setScanReview(review);
+      if (review.every(page => page.failure)) { setScanReview(review); throw new Error('No readable text detected on these pages. They may be blank, contain only graphics, or be too unclear for OCR. Try a sharper image, or use Scan to PDF to preserve the pages without text.'); }
+      setText(results.filter(Boolean).join('\n\n')); setScanReview(review);
       const failures = review.filter(page => page.failure).length;
       setStatus(`Scan complete${failures ? ` · ${failures} page(s) need another photo` : ''}. Compare each page and the flagged words with the source before exporting.`);
-    } catch (error) { if (current()) { if (review.some(page => !page.failure)) { setText(results.join('\n\n')); setScanReview(review); } setError(error.message || String(error)); } }
+    } catch (error) { if (current()) { if (review.some(page => !page.failure)) { setText(results.filter(Boolean).join('\n\n')); setScanReview(review); } setError(error.message || String(error)); } }
     finally {
       abort.abort(); releaseWorker(localWorker); if (worker.current === localWorker) worker.current = null;
       if (scanAbort.current === abort) scanAbort.current = null;
@@ -317,7 +317,7 @@ export default function DocumentWorkspace({ kind = 'scan' }) {
       <div className="min-w-0 rounded-2xl border bg-white p-3 sm:p-5 space-y-4">
         <h3 className="text-lg font-bold text-slate-900">{scan ? '3. Review and download' : 'Review and download'}</h3>
         {scanReview.length > 0 && <div className="space-y-2 rounded-xl bg-slate-50 p-3 text-sm" aria-label="Scan review">
-          <p className="font-semibold">Source review · OCR confidence is not an accuracy guarantee</p>
+          <p className="font-semibold">Source review · OCR confidence is not an accuracy guarantee</p><p className="text-slate-600">Pages marked as unreadable are excluded from the exported text. For image-only documents, use Scan to PDF to preserve every page.</p>
           {scanReview.map(page => <div key={page.page} className="break-words">
             <p className={page.failure || page.confidence < 75 ? 'text-amber-800' : 'text-slate-700'}>Page {page.page}: {page.failure || (page.direct ? 'Stored document text imported directly' : `${page.engine ? `${page.engine} · ` : ''}${page.confidence}/100 engine confidence`)}</p>
             {page.alternatives?.length > 0 && <details><summary className="cursor-pointer text-violet-700">Compare {page.alternatives.length} alternate reading(s)</summary><p className="mt-2 text-xs text-slate-600">Other passes may recover missing words. Compare them with the source and copy verified text into your edited document.</p>{page.alternatives.map((reading, index) => <div key={index} className="mt-2"><p className="text-xs">Alternative {index + 1} · {Math.round(reading.confidence)}/100 engine confidence</p><textarea aria-label={`Page ${page.page} alternative ${index + 1}`} readOnly value={reading.text} className="mt-1 min-h-24 w-full rounded-lg border bg-white p-2" /></div>)}</details>}
